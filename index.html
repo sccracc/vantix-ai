@@ -614,8 +614,8 @@ select:focus:not(:focus-visible) {
 
 .pricing-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 
 .pricing-card {
@@ -623,13 +623,13 @@ select:focus:not(:focus-visible) {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px;
+  padding: 22px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 82%, transparent), color-mix(in srgb, var(--bg-elevated) 92%, transparent)),
     radial-gradient(circle at top right, color-mix(in srgb, var(--accent-2) 16%, transparent), transparent 42%);
-  min-height: 280px;
+  min-height: 320px;
 }
 
 .pricing-card.popular {
@@ -705,12 +705,6 @@ select:focus:not(:focus-visible) {
   font-size: 12px;
 }
 
-@media (max-width: 1100px) {
-  .pricing-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 700px) {
   .pricing-grid {
     grid-template-columns: 1fr;
@@ -755,14 +749,22 @@ select:focus:not(:focus-visible) {
 /* Mode tabs */
 .mode-tabs {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
   background: var(--bg-input);
   border-radius: var(--radius-sm);
-  padding: 3px;
-  gap: 2px;
+  padding: 6px;
+  gap: 6px;
   border: 1px solid var(--border);
 }
 
+.mode-tab-row {
+  display: flex;
+  gap: 4px;
+}
+
 .mode-tab {
+  flex: 1;
   padding: 5px 14px;
   border-radius: 5px;
   border: none;
@@ -779,6 +781,18 @@ select:focus:not(:focus-visible) {
   background: var(--accent-grad);
   color: white;
   box-shadow: var(--shadow-accent);
+}
+
+.mode-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mode-tab-note {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  padding: 0 4px 1px;
 }
 
 .topbar-btn {
@@ -4101,8 +4115,11 @@ body::before {
         </div>
 
         <div class="mode-tabs">
-          <button class="mode-tab active" id="mode-expert">Expert</button>
-          <button class="mode-tab" id="mode-fast">Fast</button>
+          <div class="mode-tab-row">
+            <button class="mode-tab active" id="mode-expert" title="Pro plan and above. Uses more tokens but gives better results.">Expert</button>
+            <button class="mode-tab" id="mode-fast">Fast</button>
+          </div>
+          <div class="mode-tab-note" id="mode-tab-note">Expert uses more tokens but gives better results.</div>
         </div>
 
         <button class="topbar-btn" id="topbar-settings-btn" title="Settings">
@@ -4209,14 +4226,6 @@ body::before {
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9l-4 2.9 1.5 4.9L12 14l-4 2.8 1.5-4.9L5.5 9l4.7-1.3L12 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
               <span class="toolbar-btn-label">Prompts</span>
             </button>
-
-            <div class="thinking-toggle-row" style="margin-left: 6px;">
-              <span class="toggle-label">Think</span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="thinking-toggle">
-                <div class="toggle-slider"></div>
-              </label>
-            </div>
 
             <div class="thinking-toggle-row">
               <span class="toggle-label">Search</span>
@@ -4572,7 +4581,8 @@ const STORAGE_KEY = 'vantix_ai_state_v1';
 const BRAND_NAME = 'Vantix AI';
 const BRAND_AVATAR = 'VA';
 const BRAND_MODEL_LABEL = 'Vantix AI Core';
-const API_MODEL_ID = [100, 101, 101, 112, 115, 101, 101, 107, 45, 99, 104, 97, 116].map(code => String.fromCharCode(code)).join('');
+const EXPERT_MODEL_ID = 'deepseek-v4-pro';
+const FAST_MODEL_ID = 'deepseek-v4-flash';
 const API_URL = '/api/chat';
 const BUILD_ID = '2026-04-26-stream-debug-4';
 const DEFAULT_PLAN_CONFIG = {
@@ -4632,7 +4642,7 @@ function getSelectedModelId() {
 }
 
 function getApiModelId() {
-  return API_MODEL_ID;
+  return state.mode === 'expert' ? EXPERT_MODEL_ID : FAST_MODEL_ID;
 }
 
 const DEFAULT_PROMPTS = [
@@ -4681,12 +4691,12 @@ let state = {
     ttsEnabled: false,
   },
   theme: 'midnight',
-  mode: 'expert', // 'expert' | 'fast'
+  mode: 'fast', // 'expert' | 'fast'
   memories: [],
   prompts: [...DEFAULT_PROMPTS],
   gems: [...DEFAULT_GEMS],
   activeGemId: '',
-  thinkingEnabled: false,
+  thinkingEnabled: true,
   searchEnabled: false,
   imageAnalysisCache: {},
   sessionUsage: {
@@ -4814,7 +4824,7 @@ function loadState() {
         state.settings.localImageModel = 'none';
       }
       state.theme = saved.theme || 'midnight';
-      state.mode = saved.mode || 'expert';
+      state.mode = saved.mode || 'fast';
       state.persona = PERSONA_META[saved.persona] ? saved.persona : 'vantix';
       state.memories = saved.memories || [];
       state.imageAnalysisCache = saved.imageAnalysisCache || {};
@@ -4824,7 +4834,7 @@ function loadState() {
       const customGems = (saved.gems || []).filter(g => g.custom);
       state.gems = [...DEFAULT_GEMS, ...customGems];
       state.activeGemId = saved.activeGemId || '';
-      state.thinkingEnabled = saved.thinkingEnabled || false;
+      state.thinkingEnabled = true;
       state.searchEnabled = !!saved.searchEnabled;
       state.sessionUsage = { ...state.sessionUsage, ...(saved.sessionUsage || {}) };
       state.sessionStats = Array.isArray(saved.sessionStats) ? saved.sessionStats.slice(-50) : [];
@@ -5037,6 +5047,38 @@ function resolveUserTokenLimit(userDoc = {}, role = 'user', planId = getDefaultP
 function getDisplayPlanId(role = 'user', userDoc = {}) {
   if (role === 'admin' || isAdminUserRecord(userDoc)) return 'god_mode';
   return getStoredPlanId(userDoc);
+}
+
+function canAccessExpertMode(profile = state.usageProfile || {}) {
+  const role = profile.role || 'user';
+  const planId = profile.planId || getDefaultPlanId();
+  return role === 'admin' || ['pro', 'ultra', 'god_mode'].includes(planId);
+}
+
+function getExpertModeDisclaimer(profile = state.usageProfile || {}) {
+  if (canAccessExpertMode(profile)) {
+    return 'Expert uses more tokens but gives better results.';
+  }
+  return 'Expert uses DeepSeek V4 Pro and requires Pro or Ultra.';
+}
+
+function updateModeUI() {
+  const expertBtn = document.getElementById('mode-expert');
+  const fastBtn = document.getElementById('mode-fast');
+  const noteEl = document.getElementById('mode-tab-note');
+  if (!expertBtn || !fastBtn || !noteEl) return;
+
+  const expertAllowed = canAccessExpertMode(state.usageProfile);
+  if (!expertAllowed && state.mode === 'expert') {
+    state.mode = 'fast';
+    saveState();
+  }
+
+  expertBtn.classList.toggle('active', state.mode === 'expert');
+  fastBtn.classList.toggle('active', state.mode === 'fast');
+  expertBtn.disabled = !expertAllowed;
+  expertBtn.title = getExpertModeDisclaimer(state.usageProfile);
+  noteEl.textContent = getExpertModeDisclaimer(state.usageProfile);
 }
 
 function updatePricingModalState(activePlanId = 'free', role = 'user') {
@@ -7047,11 +7089,6 @@ async function streamResponse(conv, typingEl) {
     stream_options: { include_usage: true },
   };
 
-  // Thinking
-  if (state.thinkingEnabled && getApiModelId() === API_MODEL_ID) {
-    body.thinking = { type: 'enabled' };
-  }
-
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: {
@@ -8011,6 +8048,7 @@ async function renderUsageStats() {
     usageMetaEl.textContent = firebaseServices.enabled ? 'Sign in to view usage.' : 'Google sign-in required.';
     updateSubscriptionButton(state.usageProfile);
     updatePricingModalState(state.usageProfile.planId, state.usageProfile.role);
+    updateModeUI();
     return;
   }
 
@@ -8036,6 +8074,7 @@ async function renderUsageStats() {
       usageMetaEl.textContent = 'Unlimited admin usage.';
       updateSubscriptionButton(state.usageProfile);
       updatePricingModalState(planId, role);
+      updateModeUI();
       return;
     }
 
@@ -8046,11 +8085,13 @@ async function renderUsageStats() {
     usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} tokens used`;
     updateSubscriptionButton(state.usageProfile);
     updatePricingModalState(planId, role);
+    updateModeUI();
   } catch (err) {
     usageBarEl.hidden = !getPlanDefinition(getDefaultPlanId()).showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = 'Unable to load usage right now.';
     updateSubscriptionButton(state.usageProfile);
+    updateModeUI();
   }
 }
 
@@ -8591,11 +8632,6 @@ function initEventListeners() {
 
   document.getElementById('active-gem-trigger').addEventListener('click', openGemsManager);
 
-  // Thinking toggle
-  document.getElementById('thinking-toggle').addEventListener('change', (e) => {
-    state.thinkingEnabled = e.target.checked;
-    saveState();
-  });
   document.getElementById('search-toggle').addEventListener('change', (e) => {
     state.searchEnabled = e.target.checked;
     saveState();
@@ -8669,18 +8705,21 @@ function initEventListeners() {
 
   // Mode tabs
   document.getElementById('mode-expert').addEventListener('click', () => {
+    if (!canAccessExpertMode(state.usageProfile)) {
+      showToast('Expert mode requires Pro or Ultra');
+      openPricingModal();
+      return;
+    }
     state.mode = 'expert';
     saveState();
-    document.getElementById('mode-expert').classList.add('active');
-    document.getElementById('mode-fast').classList.remove('active');
-    showToast('🧠 Expert mode active');
+    updateModeUI();
+    showToast('Expert mode active: better results, higher token use');
   });
   document.getElementById('mode-fast').addEventListener('click', () => {
     state.mode = 'fast';
     saveState();
-    document.getElementById('mode-fast').classList.add('active');
-    document.getElementById('mode-expert').classList.remove('active');
-    showToast('⚡ Fast mode active');
+    updateModeUI();
+    showToast('Fast mode active');
   });
 
   // Mobile sidebar
@@ -9059,10 +9098,6 @@ async function streamResponse(conv, typingEl) {
     stream_options: { include_usage: true },
   };
 
-  if (state.thinkingEnabled && getApiModelId() === API_MODEL_ID) {
-    body.thinking = { type: 'enabled' };
-  }
-
   const response = await postChatRequest(body, currentController.signal);
 
   typingEl.remove();
@@ -9348,15 +9383,11 @@ async function init() {
   });
 
   // Set thinking toggle
-  document.getElementById('thinking-toggle').checked = state.thinkingEnabled;
   document.getElementById('search-toggle').checked = state.searchEnabled;
   updateLocalImageModelHint();
 
   // Set mode tabs
-  if (state.mode === 'fast') {
-    document.getElementById('mode-fast').classList.add('active');
-    document.getElementById('mode-expert').classList.remove('active');
-  }
+  updateModeUI();
 
   // Update API status
   updateApiStatus();
