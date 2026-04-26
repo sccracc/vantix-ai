@@ -214,7 +214,7 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
   if (resp.status === 404) {
     const defaultPlanId = getDefaultPlanId(planConfig);
     const defaultPlan = getPlanDefinition(planConfig, defaultPlanId);
-    return {
+    const profile = {
       uid,
       email: fallbackEmail || '',
       role: fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user',
@@ -223,6 +223,8 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
       tokensUsed: 0,
       tokenLimit: Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit),
     };
+    await upsertUserProfileDefaults(uid, profile, accessToken, projectId);
+    return profile;
   }
 
   if (!resp.ok) {
@@ -234,7 +236,7 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
   const fields = fromFirestoreFields(doc.fields || {});
   const defaultPlanId = getStoredPlanId(fields, planConfig);
   const defaultPlan = getPlanDefinition(planConfig, defaultPlanId);
-  return {
+  const profile = {
     uid,
     email: String(fields.email || fallbackEmail || ''),
     role: String(fields.role || (fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user')),
@@ -243,6 +245,10 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
     tokensUsed: toSafeNumber(fields.tokensUsed, 0),
     tokenLimit: toSafeNumber(fields.tokenLimit, Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit)),
   };
+  if (!fields.role || !fields.plan || !fields.planId || typeof fields.tokenLimit === 'undefined') {
+    await upsertUserProfileDefaults(uid, profile, accessToken, projectId);
+  }
+  return profile;
 }
 
 async function getPlanConfig(req) {
@@ -281,6 +287,37 @@ function getPlanDefinition(planConfig, planId) {
 
 function getStoredPlanId(fields = {}, planConfig = DEFAULT_PLAN_CONFIG) {
   return String(fields.plan || fields.planId || getDefaultPlanId(planConfig));
+}
+
+async function upsertUserProfileDefaults(uid, profile, accessToken, projectId) {
+  const baseUrl = `${FIRESTORE_BASE_URL}/projects/${projectId}/databases/(default)/documents/users/${encodeURIComponent(uid)}`;
+  const updateMask = ['email', 'role', 'plan', 'planId', 'tokenLimit', 'tokensUsed'];
+  const params = new URLSearchParams();
+  updateMask.forEach(field => params.append('updateMask.fieldPaths', field));
+
+  const resp = await fetch(`${baseUrl}?${params.toString()}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      fields: toFirestoreFields({
+        email: String(profile.email || ''),
+        role: String(profile.role || 'user'),
+        plan: String(profile.plan || profile.planId || 'free'),
+        planId: String(profile.planId || profile.plan || 'free'),
+        tokenLimit: Number(profile.tokenLimit || 0),
+        tokensUsed: Number(profile.tokensUsed || 0),
+      }),
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(text || `Firestore user backfill failed (${resp.status})`);
+  }
 }
 
 async function incrementUserTokensUsed(uid, tokenDelta) {
@@ -435,6 +472,26 @@ function fromFirestoreFields(fields) {
     out[key] = fromFirestoreValue(value);
   }
   return out;
+}
+
+function toFirestoreFields(fields) {
+  const out = {};
+  for (const [key, value] of Object.entries(fields)) {
+    out[key] = toFirestoreValue(value);
+  }
+  return out;
+}
+
+function toFirestoreValue(value) {
+  if (value === null || typeof value === 'undefined') return { nullValue: null };
+  if (typeof value === 'string') return { stringValue: value };
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+  }
+  if (typeof value === 'boolean') return { booleanValue: value };
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(toFirestoreValue) } };
+  if (typeof value === 'object') return { mapValue: { fields: toFirestoreFields(value) } };
+  return { stringValue: String(value) };
 }
 
 function fromFirestoreValue(value) {
