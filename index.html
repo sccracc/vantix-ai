@@ -4022,10 +4022,6 @@ body::before {
             </div>
           </div>
 
-          <div class="count-cluster">
-            <span class="char-count" id="input-token-count">~0 tokens</span>
-            <span class="char-count" id="char-count">0</span>
-          </div>
           <button id="cancel-btn" aria-label="Cancel">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7 17 17M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
@@ -4035,7 +4031,6 @@ body::before {
         </div>
     </div>
       <div class="composer-footnote">Enter sends. Shift+Enter adds a new line. Voice, files, prompts, Gems, code runner, memory, themes, and exports stay intact.</div>
-      <div class="session-usage" id="session-usage">Tokens used this session: 0, Est. cost: $0.0000</div>
       <input type="file" id="file-input" multiple accept=".txt,.md,.js,.ts,.py,.json,.css,.html,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp" style="display:none">
       <input type="file" id="import-json-input" accept="application/json,.json" style="display:none">
     </div>
@@ -4103,13 +4098,6 @@ body::before {
         <span class="slider-value" id="temp-display">0.7</span>
       </div>
       <p class="form-hint">Each reply requests the largest completion budget configured for Vantix AI, so answers are not shortened by an app-side token slider.</p>
-    </div>
-
-    <div class="form-section">
-      <label class="form-label">Session Usage</label>
-      <div class="session-usage" id="settings-session-usage" style="margin: 0; padding: 0;">Tokens used this session: 0, Est. cost: $0.0000</div>
-      <canvas class="settings-sparkline" id="session-stats-sparkline" height="80"></canvas>
-      <button type="button" class="settings-mini-btn" id="reset-session-stats-btn">Reset Stats</button>
     </div>
 
     <div class="modal-footer">
@@ -7667,7 +7655,8 @@ function estimateInputTokens(text) {
 
 function updateCharCount() {
   const ta = document.getElementById('input-textarea');
-  document.getElementById('char-count').textContent = ta.value.length;
+  const charEl = document.getElementById('char-count');
+  if (charEl) charEl.textContent = ta.value.length;
   const tokenEl = document.getElementById('input-token-count');
   if (tokenEl) tokenEl.textContent = `~${estimateInputTokens(ta.value).toLocaleString()} tokens`;
 }
@@ -7917,12 +7906,15 @@ function initEventListeners() {
       requestAnimationFrame(updateAutoScrollPill);
     });
   }
-  document.getElementById('reset-session-stats-btn').addEventListener('click', () => {
-    state.sessionStats = [];
-    saveState();
-    drawSessionStatsSparkline();
-    showToast('Session stats reset');
-  });
+  const resetSessionStatsBtn = document.getElementById('reset-session-stats-btn');
+  if (resetSessionStatsBtn) {
+    resetSessionStatsBtn.addEventListener('click', () => {
+      state.sessionStats = [];
+      saveState();
+      drawSessionStatsSparkline();
+      showToast('Session stats reset');
+    });
+  }
 
   const mainArea = document.getElementById('main');
   const dropOverlay = document.getElementById('chat-drop-overlay');
