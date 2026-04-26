@@ -100,18 +100,17 @@ async function resolveStripePriceId(envKey) {
   const value = String(process.env[envKey] || '').trim();
   if (!value) throw new Error(`Missing ${envKey} environment variable`);
   if (value.startsWith('price_')) return value;
-  if (value.startsWith('prod_')) return await findActiveRecurringPriceForProduct(value);
+  if (value.startsWith('prod_')) return await findActiveOneTimePriceForProduct(value);
   return value;
 }
 
-async function findActiveRecurringPriceForProduct(productId) {
-  const resp = await stripeRequest(`/prices?product=${encodeURIComponent(productId)}&active=true&type=recurring&limit=100`);
+async function findActiveOneTimePriceForProduct(productId) {
+  const resp = await stripeRequest(`/prices?product=${encodeURIComponent(productId)}&active=true&type=one_time&limit=100`);
   const prices = Array.isArray(resp.data) ? resp.data : [];
   if (!prices.length) {
-    throw new Error(`No active recurring price found for product ${productId}`);
+    throw new Error(`No active one-time price found for product ${productId}`);
   }
-  const preferred = prices.find(price => price?.recurring?.interval === 'month') || prices[0];
-  return preferred.id;
+  return prices[0].id;
 }
 
 async function stripeFormRequest(path, formFields) {
