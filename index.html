@@ -4648,33 +4648,47 @@ async function consumeChatStream(response, handlers = {}) {
   const decoder = new TextDecoder();
   let buffer = '';
 
+  function processEvent(rawEvent) {
+    const dataLines = [];
+    for (const rawLine of rawEvent.split(/\r?\n/)) {
+      if (!rawLine.startsWith('data:')) continue;
+      dataLines.push(rawLine.slice(5).trimStart());
+    }
+
+    const data = dataLines.join('\n').trim();
+    if (!data || data === '[DONE]') return;
+
+    try {
+      const json = JSON.parse(data);
+      if (json.usage && handlers.onUsage) handlers.onUsage(json.usage);
+      const choice = json.choices?.[0];
+      if (choice?.finish_reason && handlers.onFinishReason) handlers.onFinishReason(choice.finish_reason);
+      const delta = choice?.delta;
+      if (!delta) return;
+      if (delta.reasoning_content && handlers.onReasoning) handlers.onReasoning(delta.reasoning_content);
+      if (delta.content && handlers.onContent) handlers.onContent(delta.content);
+    } catch (err) {
+      console.warn('Malformed stream event skipped:', err);
+    }
+  }
+
   while (true) {
     const { value, done } = await reader.read();
-    if (done) break;
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() || '';
 
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-      if (!line.startsWith('data: ')) continue;
-      const data = line.slice(6).trim();
-      if (!data || data === '[DONE]') continue;
-
-      try {
-        const json = JSON.parse(data);
-        if (json.usage && handlers.onUsage) handlers.onUsage(json.usage);
-        const choice = json.choices?.[0];
-        if (choice?.finish_reason && handlers.onFinishReason) handlers.onFinishReason(choice.finish_reason);
-        const delta = choice?.delta;
-        if (!delta) continue;
-        if (delta.reasoning_content && handlers.onReasoning) handlers.onReasoning(delta.reasoning_content);
-        if (delta.content && handlers.onContent) handlers.onContent(delta.content);
-      } catch (err) {
-        console.warn('Malformed stream chunk skipped:', err);
-      }
+    for (const event of events) {
+      processEvent(event);
     }
+
+    if (done) break;
+  }
+
+  const tail = buffer.trim();
+  if (tail) {
+    processEvent(tail);
   }
 }
 

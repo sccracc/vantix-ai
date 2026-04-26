@@ -76,11 +76,32 @@ export default async function handler(req) {
     });
   }
 
-  return new Response(upstream.body, {
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const reader = upstream.body.getReader();
+
+  (async () => {
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) await writer.write(value);
+      }
+    } catch (error) {
+      console.error('Stream relay failed:', error);
+    } finally {
+      await writer.close().catch(() => {});
+      reader.releaseLock();
+    }
+  })();
+
+  return new Response(readable, {
     status: upstream.status,
     headers: {
       'Content-Type': upstream.headers.get('content-type') || 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
       'Access-Control-Allow-Origin': '*',
     },
   });
