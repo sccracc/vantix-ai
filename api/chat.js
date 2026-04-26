@@ -138,7 +138,7 @@ export default async function handler(req) {
     });
   } catch (error) {
     return jsonResponse(
-      { error: { message: error?.message || 'Failed to reach DeepSeek' } },
+      { error: { message: error?.message || 'Failed to reach Vantix AI' } },
       502
     );
   }
