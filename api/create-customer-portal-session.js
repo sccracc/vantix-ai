@@ -83,7 +83,14 @@ async function stripeFormRequest(path, formFields) {
 }
 
 async function getOrCreateStripeCustomer({ uid, email, name, existingCustomerId }) {
-  if (existingCustomerId) return existingCustomerId;
+  if (existingCustomerId) {
+    try {
+      const existing = await stripeRequest(`/customers/${encodeURIComponent(existingCustomerId)}`);
+      if (existing?.id) return existing.id;
+    } catch {
+      // Customer exists in the other Stripe mode; create a mode-appropriate one.
+    }
+  }
   const customer = await stripeFormRequest('/customers', {
     email,
     name,
