@@ -4429,11 +4429,11 @@ function ensureSignInCooldownTicker() {
 async function finalizeAuthFromUrl(client) {
   const searchParams = new URLSearchParams(window.location.search || '');
   const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
-  const code = searchParams.get('code');
-  const tokenHash = searchParams.get('token_hash');
-  const type = searchParams.get('type');
-  const accessToken = hashParams.get('access_token');
-  const refreshToken = hashParams.get('refresh_token');
+  const code = searchParams.get('code') || hashParams.get('code');
+  const tokenHash = searchParams.get('token_hash') || hashParams.get('token_hash');
+  const type = searchParams.get('type') || hashParams.get('type');
+  const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
   const hasTokenFragment = !!(accessToken && refreshToken);
 
   try {
@@ -4449,6 +4449,8 @@ async function finalizeAuthFromUrl(client) {
     } else {
       return;
     }
+    const { data: { session } } = await client.auth.getSession();
+    if (session) setUserSession(session);
   } catch (err) {
     console.warn('Supabase callback exchange error:', err);
   } finally {
@@ -4467,15 +4469,19 @@ async function initAuth() {
   }
 
   try {
-    await finalizeAuthFromUrl(client);
-    const { data: { session } } = await client.auth.getSession();
-    setUserSession(session || null);
-
     if (!authSubscriptionBound) {
       client.auth.onAuthStateChange((event, data) => {
         setUserSession(data?.session || null);
       });
       authSubscriptionBound = true;
+    }
+
+    await finalizeAuthFromUrl(client);
+    const { data: { session } } = await client.auth.getSession();
+    setUserSession(session || null);
+    if (!session && typeof client.auth.refreshSession === 'function') {
+      const refreshed = await client.auth.refreshSession().catch(() => null);
+      setUserSession(refreshed?.data?.session || null);
     }
   } catch (err) {
     console.warn('Supabase auth init error:', err);
