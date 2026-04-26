@@ -1,10 +1,6 @@
 [build]
   functions = "netlify/functions"
 
-[[edge_functions]]
-  function = "chat"
-  path = "/api/chat"
-
 [[redirects]]
   from = "/*"
   to = "/index.html"

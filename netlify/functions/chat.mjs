@@ -1,6 +1,14 @@
-const { createClient } = require('@supabase/supabase-js');
-
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+
+function json(status, payload) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
+  });
+}
 
 function normalizeSupabaseUrl(rawUrl) {
   const text = String(rawUrl || '').trim();
@@ -11,26 +19,6 @@ function normalizeSupabaseUrl(rawUrl) {
   } catch (_) {
     return '';
   }
-}
-
-function json(statusCode, payload) {
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
-    },
-    body: JSON.stringify(payload),
-  };
-}
-
-function getBearerToken(event) {
-  const authHeader =
-    event.headers?.authorization ||
-    event.headers?.Authorization ||
-    '';
-  if (!authHeader.startsWith('Bearer ')) return '';
-  return authHeader.slice('Bearer '.length).trim();
 }
 
 function parseJwtPayload(token) {
@@ -71,32 +59,44 @@ async function validateSupabaseToken(accessToken) {
     return { ok: false, reason: 'Session token is expired.' };
   }
 
-  const keysToTry = [serviceRoleKey, anonKey].filter(Boolean);
-  let lastError = '';
-  for (const key of keysToTry) {
-    const supabase = createClient(supabaseUrl, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
+  const apiKey = serviceRoleKey || anonKey;
+  try {
+    const resp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        'apikey': apiKey,
+        'authorization': `Bearer ${accessToken}`,
+      },
     });
-    const { data, error } = await supabase.auth.getUser(accessToken);
-    if (!error && data?.user) {
-      return { ok: true, user: data.user };
+    if (!resp.ok) {
+      const text = await resp.text();
+      return { ok: false, reason: `Invalid session token. ${text || `HTTP ${resp.status}`}`.trim() };
     }
-    lastError = error?.message || lastError;
+    const user = await resp.json().catch(() => null);
+    if (!user?.id) {
+      return { ok: false, reason: 'Invalid session token.' };
+    }
+    return { ok: true, user };
+  } catch (error) {
+    return { ok: false, reason: `Supabase auth check failed. ${error?.message || 'Unknown error'}` };
   }
-  return { ok: false, reason: `Invalid session token. ${lastError}`.trim() };
 }
 
-exports.handler = async function handler(event) {
-  if (event.httpMethod !== 'POST') {
+export default async (request) => {
+  if (request.method !== 'POST') {
     return json(405, { error: { message: 'Method not allowed.' } });
   }
 
-  const token = getBearerToken(event);
-  if (!token) {
+  const authHeader = request.headers.get('authorization') || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return json(401, { error: { message: 'Missing bearer token.' } });
+  }
+  const accessToken = authHeader.slice('Bearer '.length).trim();
+  if (!accessToken) {
     return json(401, { error: { message: 'Missing bearer token.' } });
   }
 
-  const auth = await validateSupabaseToken(token);
+  const auth = await validateSupabaseToken(accessToken);
   if (!auth.ok) {
     return json(401, { error: { message: auth.reason } });
   }
@@ -108,7 +108,7 @@ exports.handler = async function handler(event) {
 
   let payload;
   try {
-    payload = JSON.parse(event.body || '{}');
+    payload = await request.json();
   } catch (_) {
     return json(400, { error: { message: 'Invalid JSON body.' } });
   }
@@ -117,21 +117,19 @@ exports.handler = async function handler(event) {
     const upstream = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${deepseekApiKey}`,
+        'content-type': 'application/json',
+        'authorization': `Bearer ${deepseekApiKey}`,
       },
       body: JSON.stringify(payload),
     });
 
-    const text = await upstream.text();
-    return {
-      statusCode: upstream.status,
+    return new Response(upstream.body, {
+      status: upstream.status,
       headers: {
-        'Content-Type': upstream.headers.get('content-type') || 'application/json',
-        'Cache-Control': 'no-store',
+        'content-type': upstream.headers.get('content-type') || 'application/json',
+        'cache-control': 'no-store',
       },
-      body: text,
-    };
+    });
   } catch (error) {
     return json(502, {
       error: {
