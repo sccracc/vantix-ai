@@ -1,5 +1,16 @@
+function normalizeSupabaseUrl(rawUrl) {
+  const text = String(rawUrl || '').trim();
+  if (!text) return '';
+  try {
+    const parsed = new URL(text);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (_) {
+    return '';
+  }
+}
+
 exports.handler = async function handler() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
+  const supabaseUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL || '');
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 
   if (!supabaseUrl || !supabaseAnonKey) {

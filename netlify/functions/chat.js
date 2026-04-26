@@ -2,6 +2,17 @@ const { createClient } = require('@supabase/supabase-js');
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
+function normalizeSupabaseUrl(rawUrl) {
+  const text = String(rawUrl || '').trim();
+  if (!text) return '';
+  try {
+    const parsed = new URL(text);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (_) {
+    return '';
+  }
+}
+
 function json(statusCode, payload) {
   return {
     statusCode,
@@ -35,7 +46,7 @@ function parseJwtPayload(token) {
 }
 
 async function validateSupabaseToken(accessToken) {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
+  const supabaseUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL || '');
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const anonKey = process.env.SUPABASE_ANON_KEY || '';
   const tokenPayload = parseJwtPayload(accessToken);
