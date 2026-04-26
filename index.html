@@ -3887,7 +3887,7 @@ body::before {
         <div class="topbar-title-group">
           <div class="topbar-label">Active Session</div>
           <div class="topbar-title" id="chat-title">New Conversation</div>
-          <div class="topbar-note" id="persona-topbar-note">One assistant. One workspace. Original Vantix AI.</div>
+          <div class="topbar-note" id="persona-topbar-note">One assistant. One workspace. Original Vantix AI. <span id="build-stamp">Build 2026-04-26-stream-debug-4</span></div>
         </div>
       </div>
 
@@ -4299,6 +4299,7 @@ const BRAND_AVATAR = 'VA';
 const BRAND_MODEL_LABEL = 'Vantix AI Core';
 const API_MODEL_ID = [100, 101, 101, 112, 115, 101, 101, 107, 45, 99, 104, 97, 116].map(code => String.fromCharCode(code)).join('');
 const API_URL = '/api/chat';
+const BUILD_ID = '2026-04-26-stream-debug-4';
 const FIREBASE_VERSION = '10.12.5';
 const FIREBASE_CONFIG = window.VANTIX_FIREBASE_CONFIG || {
   apiKey: "AIzaSyDtzJtUtMKPS84G9-0p1S1hHA_DsNYG-JM",
@@ -4579,6 +4580,7 @@ function updateAuthUI() {
     signInBtn.title = 'Add a valid Firebase config to enable Google sign-in';
     authUserEl.hidden = true;
     emailEl.textContent = '';
+    updateComposerAccess();
     return;
   }
 
@@ -4586,6 +4588,35 @@ function updateAuthUI() {
   signInBtn.title = currentUser ? 'Google account connected' : '';
   authUserEl.hidden = !currentUser;
   emailEl.textContent = currentUser?.email || '';
+  updateComposerAccess();
+}
+
+function canUseChat() {
+  return !!(firebaseServices.enabled && currentUser);
+}
+
+function updateComposerAccess() {
+  const textarea = document.getElementById('input-textarea');
+  const sendBtn = document.getElementById('send-btn');
+  const micBtn = document.getElementById('mic-btn');
+  const fileBtn = document.getElementById('file-upload-btn');
+  const promptBtn = document.getElementById('prompt-lib-btn');
+  if (!textarea || !sendBtn || !micBtn || !fileBtn || !promptBtn) return;
+
+  const allowed = canUseChat();
+  textarea.disabled = !allowed;
+  micBtn.disabled = !allowed;
+  fileBtn.disabled = !allowed;
+  promptBtn.disabled = !allowed;
+  if (!allowed) {
+    sendBtn.disabled = true;
+    textarea.placeholder = firebaseServices.enabled
+      ? 'Sign in with Google to chat with Vantix AI'
+      : 'Google sign-in is required to use chat';
+  } else {
+    sendBtn.disabled = isStreaming;
+    textarea.placeholder = 'Message Vantix AI...';
+  }
 }
 
 async function signInWithGoogle() {
@@ -6131,6 +6162,12 @@ async function sendMessage() {
   closeComposerHistory();
   let userText = textarea.value.trim();
 
+  if (!canUseChat()) {
+    showToast(firebaseServices.enabled ? 'Sign in with Google to use chat' : 'Google sign-in is required to use chat');
+    openModal('settings-modal');
+    return;
+  }
+
   if (!userText && attachedFiles.length === 0) return;
   if (isStreaming) return;
 
@@ -6656,8 +6693,15 @@ async function regenerateMessage(msgIdx) {
 function updateStreamingUI(streaming) {
   const sendBtn = document.getElementById('send-btn');
   const cancelBtn = document.getElementById('cancel-btn');
-  sendBtn.disabled = streaming;
+  sendBtn.disabled = streaming || !canUseChat();
   cancelBtn.classList.toggle('visible', streaming);
+}
+
+function updateBuildStamp() {
+  const buildStampEl = document.getElementById('build-stamp');
+  if (buildStampEl) {
+    buildStampEl.textContent = `Build ${BUILD_ID}`;
+  }
 }
 
 // ============================================================
@@ -8471,6 +8515,7 @@ function updateApiStatus() {
 // INITIALIZATION
 // ============================================================
 async function init() {
+  document.title = `${BRAND_NAME} • ${BUILD_ID}`;
   // Load pdf.js worker path
   if (window['pdfjs-dist/build/pdf']) {
     window['pdfjs-dist/build/pdf'].GlobalWorkerOptions.workerSrc =
@@ -8502,6 +8547,7 @@ async function init() {
 
   // Update API status
   updateApiStatus();
+  updateBuildStamp();
   renderSessionUsage();
   drawSessionStatsSparkline();
 
