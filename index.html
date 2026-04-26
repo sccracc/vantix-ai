@@ -4347,11 +4347,11 @@ function maxCompletionTokensForModel() {
 }
 
 function getSelectedModelId() {
-  return state.mode === 'fast' ? 'Fast' : 'Expert';
+  return state.mode === 'fast' ? 'DeepSeek Chat' : 'DeepSeek V4 Pro';
 }
 
 function getApiModelId() {
-  return state.mode === 'fast' ? 'deepseek-v4-flash' : 'deepseek-v4-pro';
+  return state.mode === 'fast' ? 'deepseek-chat' : 'deepseek-v4-pro';
 }
 
 function userAuthToken() {
@@ -6339,9 +6339,11 @@ function addTypingIndicator() {
 
 async function streamResponse(conv, typingEl) {
   const messages = conv.messages.map(messageToApiFormat);
+  const apiModelId = getApiModelId();
+  const allowThinking = state.thinkingEnabled && apiModelId === API_MODEL_ID;
 
   const body = {
-    model: getApiModelId(),
+    model: apiModelId,
     messages: [
       { role: 'system', content: buildSystemPrompt() },
       ...messages,
@@ -6353,7 +6355,7 @@ async function streamResponse(conv, typingEl) {
   };
 
   // Thinking
-  if (state.thinkingEnabled && getApiModelId() === API_MODEL_ID) {
+  if (allowThinking) {
     body.thinking = { type: 'enabled' };
   }
 
@@ -6474,7 +6476,7 @@ async function streamResponse(conv, typingEl) {
         const delta = choice?.delta;
         if (!delta) continue;
 
-        if (delta.reasoning_content) {
+        if (allowThinking && delta.reasoning_content) {
           accumulatedReasoning += delta.reasoning_content;
           pendingReasoning = accumulatedReasoning;
         }
@@ -8231,8 +8233,10 @@ function addTypingIndicator() {
 async function streamResponse(conv, typingEl) {
   const messages = conv.messages.map(messageToApiFormat);
   const assistantIdentity = getAssistantIdentity(conv);
+  const apiModelId = getApiModelId();
+  const allowThinking = state.thinkingEnabled && apiModelId === API_MODEL_ID;
   const body = {
-    model: getApiModelId(),
+    model: apiModelId,
     messages: [
       { role: 'system', content: buildSystemPrompt() },
       ...messages,
@@ -8243,7 +8247,7 @@ async function streamResponse(conv, typingEl) {
     stream_options: { include_usage: true },
   };
 
-  if (state.thinkingEnabled && getApiModelId() === API_MODEL_ID) {
+  if (allowThinking) {
     body.thinking = { type: 'enabled' };
   }
 
@@ -8361,7 +8365,7 @@ async function streamResponse(conv, typingEl) {
         const delta = choice?.delta;
         if (!delta) continue;
 
-        if (delta.reasoning_content) {
+        if (allowThinking && delta.reasoning_content) {
           accumulatedReasoning += delta.reasoning_content;
           pendingReasoning = accumulatedReasoning;
         }
