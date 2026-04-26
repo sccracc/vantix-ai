@@ -167,15 +167,48 @@ export const handler = stream(async (event) => {
       body: JSON.stringify(payload),
     });
 
+    if (!upstream.body) {
+      const text = await upstream.text();
+      return {
+        statusCode: upstream.status,
+        headers: {
+          'content-type': upstream.headers.get('content-type') || 'application/json',
+          'cache-control': 'no-store',
+        },
+        body: text,
+      };
+    }
+
+    const reader = upstream.body.getReader();
+    const body = new ReadableStream({
+      async pull(controller) {
+        try {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+            return;
+          }
+          if (value) controller.enqueue(value);
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+      cancel(reason) {
+        reader.cancel(reason).catch(() => {});
+      },
+    });
+
     return {
       statusCode: upstream.status,
       headers: {
-        'content-type': upstream.headers.get('content-type') || 'application/json',
-        'cache-control': 'no-store',
+        'content-type': upstream.headers.get('content-type') || 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache, no-store, must-revalidate, no-transform',
+        'pragma': 'no-cache',
+        'expires': '0',
         'x-accel-buffering': 'no',
         'connection': 'keep-alive',
       },
-      body: upstream.body,
+      body,
     };
   } catch (error) {
     return {
