@@ -4647,6 +4647,7 @@ async function consumeChatStream(response, handlers = {}) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let lastYieldAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
 
   function processEvent(rawEvent) {
     const dataLines = [];
@@ -4678,9 +4679,17 @@ async function consumeChatStream(response, handlers = {}) {
 
     const events = buffer.split(/\r?\n\r?\n/);
     buffer = events.pop() || '';
+    let processedEventCount = 0;
 
     for (const event of events) {
       processEvent(event);
+      processedEventCount += 1;
+    }
+
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (processedEventCount > 0 && now - lastYieldAt >= 16) {
+      lastYieldAt = now;
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     if (done) break;
