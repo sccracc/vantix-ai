@@ -4578,8 +4578,13 @@ function readRawLocalState() {
 
 function getLegacyLocalConversationState() {
   const saved = readRawLocalState();
+  const conversations = {};
+  Object.entries(saved?.conversations || {}).forEach(([id, conv]) => {
+    const normalized = normalizeConversation({ id, ...conv });
+    if (normalized) conversations[normalized.id] = normalized;
+  });
   return {
-    conversations: saved?.conversations || {},
+    conversations,
     currentConvId: saved?.currentConvId || null,
   };
 }
@@ -4588,6 +4593,12 @@ function loadState() {
   try {
     const saved = readRawLocalState();
     if (saved) {
+      const savedConversations = {};
+      Object.entries(saved.conversations || {}).forEach(([id, conv]) => {
+        const normalized = normalizeConversation({ id, ...conv });
+        if (normalized) savedConversations[normalized.id] = normalized;
+      });
+      state.conversations = savedConversations;
       // Merge carefully
       state.currentConvId = saved.currentConvId || null;
       state.settings = { ...state.settings, ...saved.settings };
@@ -4621,7 +4632,13 @@ function loadState() {
 
 function saveState() {
   try {
+    const conversations = {};
+    Object.values(state.conversations || {}).forEach(conv => {
+      const normalized = normalizeConversation(conv);
+      if (normalized) conversations[normalized.id] = normalized;
+    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      conversations,
       currentConvId: state.currentConvId,
       settings: state.settings,
       theme: state.theme,
@@ -4721,11 +4738,20 @@ function subscribeToConversationList() {
   const convCollection = firebaseServices.collection(firebaseServices.db, 'users', currentUser.uid, 'conversations');
   const convQuery = firebaseServices.query(convCollection, firebaseServices.orderBy('lastUpdated', 'desc'));
   unsubscribeConversations = firebaseServices.onSnapshot(convQuery, (snapshot) => {
+    const localConversations = { ...state.conversations };
     const nextConversations = {};
     snapshot.forEach(docSnap => {
       const conv = normalizeConversation({ id: docSnap.id, ...docSnap.data() });
       if (conv) nextConversations[conv.id] = conv;
     });
+
+    Object.values(localConversations).forEach(conv => {
+      if (!nextConversations[conv.id]) {
+        nextConversations[conv.id] = normalizeConversation(conv);
+        persistConversationToFirestore(conv);
+      }
+    });
+
     state.conversations = nextConversations;
 
     if (!state.currentConvId || !state.conversations[state.currentConvId]) {
