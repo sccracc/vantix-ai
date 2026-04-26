@@ -4381,8 +4381,22 @@ const BRAND_MODEL_LABEL = 'Vantix AI Core';
 const API_MODEL_ID = [100, 101, 101, 112, 115, 101, 101, 107, 45, 99, 104, 97, 116].map(code => String.fromCharCode(code)).join('');
 const API_URL = '/api/chat';
 const BUILD_ID = '2026-04-26-stream-debug-4';
-const ADMIN_EMAIL = 'socceracctiktok@gmail.com';
-const DEFAULT_TOKEN_LIMIT = 100000;
+const DEFAULT_PLAN_CONFIG = {
+  adminEmail: 'socceracctiktok@gmail.com',
+  defaultPlanId: 'free',
+  plans: {
+    free: {
+      label: 'Free',
+      tokenLimit: 100000,
+      showProgressBar: true,
+    },
+    god_mode: {
+      label: 'God Mode',
+      tokenLimit: 999999999,
+      showProgressBar: false,
+    },
+  },
+};
 const FIREBASE_VERSION = '10.12.5';
 const FIREBASE_CONFIG = window.VANTIX_FIREBASE_CONFIG || {
   apiKey: "AIzaSyDtzJtUtMKPS84G9-0p1S1hHA_DsNYG-JM",
@@ -4472,10 +4486,12 @@ let state = {
   persona: 'vantix',
   usageProfile: {
     role: 'user',
+    planId: 'free',
     tokensUsed: 0,
-    tokenLimit: DEFAULT_TOKEN_LIMIT,
+    tokenLimit: 100000,
   },
 };
+let planConfig = JSON.parse(JSON.stringify(DEFAULT_PLAN_CONFIG));
 
 const PERSONA_META = {
   vantix: {
@@ -4601,6 +4617,41 @@ function hasFirebaseConfig() {
   });
 }
 
+function getAdminEmail() {
+  return planConfig?.adminEmail || DEFAULT_PLAN_CONFIG.adminEmail;
+}
+
+function getDefaultPlanId() {
+  return planConfig?.defaultPlanId || DEFAULT_PLAN_CONFIG.defaultPlanId;
+}
+
+function getPlanDefinition(planId) {
+  const plans = planConfig?.plans || DEFAULT_PLAN_CONFIG.plans;
+  return plans[planId] || plans[getDefaultPlanId()] || DEFAULT_PLAN_CONFIG.plans.free;
+}
+
+function getDefaultTokenLimit() {
+  return Number(getPlanDefinition(getDefaultPlanId()).tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit);
+}
+
+async function loadPlanConfig() {
+  try {
+    const resp = await fetch('./plan-config.json', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const json = await resp.json();
+    planConfig = {
+      ...DEFAULT_PLAN_CONFIG,
+      ...json,
+      plans: {
+        ...DEFAULT_PLAN_CONFIG.plans,
+        ...(json?.plans || {}),
+      },
+    };
+  } catch (err) {
+    console.warn('Plan config load failed:', err);
+  }
+}
+
 async function initFirebase() {
   if (!hasFirebaseConfig()) {
     console.warn('Firebase config missing. Set window.VANTIX_FIREBASE_CONFIG or replace the placeholders in index.html.');
@@ -4642,7 +4693,7 @@ async function initFirebase() {
           const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
           const userSnap = firebaseServices.getDoc ? await firebaseServices.getDoc(userRef) : null;
           const userDoc = userSnap && userSnap.exists() ? (userSnap.data() || {}) : {};
-          if (userDoc.role === 'admin' || currentUser.email === ADMIN_EMAIL) {
+          if (userDoc.role === 'admin' || currentUser.email === getAdminEmail()) {
             window.isGodMode = true;
             showToast('God Mode Active: Welcome Socceracctiktok');
           }
@@ -4653,8 +4704,9 @@ async function initFirebase() {
               email: currentUser.email || '',
               displayName: currentUser.displayName || '',
               photoURL: currentUser.photoURL || '',
-              role: userDoc.role || (currentUser.email === ADMIN_EMAIL ? 'admin' : 'user'),
-              tokenLimit: Number(userDoc.tokenLimit || DEFAULT_TOKEN_LIMIT),
+              role: userDoc.role || (currentUser.email === getAdminEmail() ? 'admin' : 'user'),
+              planId: userDoc.planId || getDefaultPlanId(),
+              tokenLimit: Number(userDoc.tokenLimit || getDefaultTokenLimit()),
               tokensUsed: Number(userDoc.tokensUsed || 0),
               lastLoginAt: firebaseServices.serverTimestamp(),
             },
@@ -4696,7 +4748,7 @@ function updateAuthUI() {
   signInBtn.title = currentUser ? 'Google account connected' : '';
   authUserEl.hidden = !currentUser;
   emailEl.textContent = currentUser?.email || '';
-  adminPanelBtn.hidden = currentUser?.email !== ADMIN_EMAIL;
+  adminPanelBtn.hidden = currentUser?.email !== getAdminEmail();
   updateComposerAccess();
   renderUsageStats();
 }
@@ -7406,11 +7458,13 @@ async function renderUsageStats() {
   if (!firebaseServices.enabled || !currentUser || !firebaseServices.db || !firebaseServices.doc || !firebaseServices.getDoc) {
     state.usageProfile = {
       role: 'user',
+      planId: getDefaultPlanId(),
       tokensUsed: 0,
-      tokenLimit: DEFAULT_TOKEN_LIMIT,
+      tokenLimit: getDefaultTokenLimit(),
     };
-    planNameEl.textContent = 'Free';
-    usageBarEl.hidden = false;
+    const defaultPlan = getPlanDefinition(getDefaultPlanId());
+    planNameEl.textContent = defaultPlan.label || 'Free';
+    usageBarEl.hidden = !defaultPlan.showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = firebaseServices.enabled ? 'Sign in to view usage.' : 'Google sign-in required.';
     return;
@@ -7420,38 +7474,49 @@ async function renderUsageStats() {
     const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
     const userSnap = await firebaseServices.getDoc(userRef);
     const userDoc = userSnap.exists() ? (userSnap.data() || {}) : {};
-    const role = userDoc.role === 'admin' || currentUser.email === ADMIN_EMAIL ? 'admin' : 'user';
-    const tokenLimit = Number(userDoc.tokenLimit || DEFAULT_TOKEN_LIMIT);
+    const role = userDoc.role === 'admin' || currentUser.email === getAdminEmail() ? 'admin' : 'user';
+    const planId = userDoc.planId || getDefaultPlanId();
+    const planDef = getPlanDefinition(role === 'admin' ? 'god_mode' : planId);
+    const tokenLimit = Number(userDoc.tokenLimit || planDef.tokenLimit || getDefaultTokenLimit());
     const tokensUsed = Number(userDoc.tokensUsed || 0);
     state.usageProfile = {
       role,
+      planId,
       tokenLimit,
       tokensUsed,
     };
 
     if (role === 'admin') {
-      planNameEl.textContent = 'God Mode';
+      planNameEl.textContent = planDef.label || 'God Mode';
       usageBarEl.hidden = true;
       usageMetaEl.textContent = 'Unlimited admin usage.';
       return;
     }
 
     const pct = Math.max(0, Math.min(100, (tokensUsed / Math.max(1, tokenLimit)) * 100));
-    planNameEl.textContent = 'Free';
-    usageBarEl.hidden = false;
+    planNameEl.textContent = planDef.label || 'Free';
+    usageBarEl.hidden = !planDef.showProgressBar;
     usageFillEl.style.width = `${pct}%`;
     usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} tokens used`;
   } catch (err) {
-    usageBarEl.hidden = false;
+    usageBarEl.hidden = !getPlanDefinition(getDefaultPlanId()).showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = 'Unable to load usage right now.';
   }
 }
 
 function renderSessionUsage() {
-  const text = formatSessionUsageText();
   const footerEl = document.getElementById('session-usage');
   const settingsEl = document.getElementById('settings-session-usage');
+  const isAdminUser = !!(window.isGodMode || currentUser?.email === getAdminEmail());
+
+  if (!isAdminUser) {
+    if (footerEl) footerEl.textContent = '';
+    if (settingsEl) settingsEl.textContent = '';
+    return;
+  }
+
+  const text = formatSessionUsageText();
   if (footerEl) footerEl.textContent = text;
   if (settingsEl) settingsEl.textContent = text;
 }
@@ -8704,6 +8769,7 @@ function updateApiStatus() {
 // INITIALIZATION
 // ============================================================
 async function init() {
+  await loadPlanConfig();
   document.title = `${BRAND_NAME} • ${BUILD_ID}`;
   // Load pdf.js worker path
   if (window['pdfjs-dist/build/pdf']) {

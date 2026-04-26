@@ -1,0 +1,16 @@
+{
+  "adminEmail": "socceracctiktok@gmail.com",
+  "defaultPlanId": "free",
+  "plans": {
+    "free": {
+      "label": "Free",
+      "tokenLimit": 10000,
+      "showProgressBar": true
+    },
+    "god_mode": {
+      "label": "God Mode",
+      "tokenLimit": 999999999,
+      "showProgressBar": false
+    }
+  }
+}

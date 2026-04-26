@@ -3,8 +3,22 @@ export const config = { runtime: 'edge' };
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const FIREBASE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const FIRESTORE_BASE_URL = 'https://firestore.googleapis.com/v1';
-const DEFAULT_TOKEN_LIMIT = 100000;
-const ADMIN_EMAIL = 'socceracctiktok@gmail.com';
+const DEFAULT_PLAN_CONFIG = {
+  adminEmail: 'socceracctiktok@gmail.com',
+  defaultPlanId: 'free',
+  plans: {
+    free: {
+      label: 'Free',
+      tokenLimit: 100000,
+      showProgressBar: true,
+    },
+    god_mode: {
+      label: 'God Mode',
+      tokenLimit: 999999999,
+      showProgressBar: false,
+    },
+  },
+};
 
 let googleTokenCache = {
   accessToken: '',
@@ -64,9 +78,10 @@ export default async function handler(req) {
     return jsonResponse({ error: { message: 'Missing authenticated user UID' } }, 401);
   }
 
+  const planConfig = await getPlanConfig(req);
   let userProfile;
   try {
-    userProfile = await getUserProfile(userUid, userEmail);
+    userProfile = await getUserProfile(userUid, userEmail, planConfig);
   } catch (error) {
     return jsonResponse(
       { error: { message: error?.message || 'Failed to load usage profile' } },
@@ -74,7 +89,10 @@ export default async function handler(req) {
     );
   }
 
-  const isAdmin = userProfile.role === 'admin' || userProfile.email === ADMIN_EMAIL || userEmail === ADMIN_EMAIL;
+  const isAdmin =
+    userProfile.role === 'admin' ||
+    userProfile.email === getAdminEmail(planConfig) ||
+    userEmail === getAdminEmail(planConfig);
   if (!isAdmin && userProfile.tokensUsed >= userProfile.tokenLimit) {
     return jsonResponse({ error: { message: 'Usage limit reached' } }, 403);
   }
@@ -182,7 +200,7 @@ function jsonResponse(body, status) {
   });
 }
 
-async function getUserProfile(uid, fallbackEmail = '') {
+async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN_CONFIG) {
   const accessToken = await getGoogleAccessToken();
   const projectId = getFirebaseProjectId();
   const docUrl = `${FIRESTORE_BASE_URL}/projects/${projectId}/databases/(default)/documents/users/${encodeURIComponent(uid)}`;
@@ -194,12 +212,15 @@ async function getUserProfile(uid, fallbackEmail = '') {
   });
 
   if (resp.status === 404) {
+    const defaultPlanId = getDefaultPlanId(planConfig);
+    const defaultPlan = getPlanDefinition(planConfig, defaultPlanId);
     return {
       uid,
       email: fallbackEmail || '',
-      role: fallbackEmail === ADMIN_EMAIL ? 'admin' : 'user',
+      role: fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user',
+      planId: defaultPlanId,
       tokensUsed: 0,
-      tokenLimit: DEFAULT_TOKEN_LIMIT,
+      tokenLimit: Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit),
     };
   }
 
@@ -210,13 +231,50 @@ async function getUserProfile(uid, fallbackEmail = '') {
 
   const doc = await resp.json();
   const fields = fromFirestoreFields(doc.fields || {});
+  const defaultPlanId = fields.planId || getDefaultPlanId(planConfig);
+  const defaultPlan = getPlanDefinition(planConfig, defaultPlanId);
   return {
     uid,
     email: String(fields.email || fallbackEmail || ''),
-    role: String(fields.role || (fallbackEmail === ADMIN_EMAIL ? 'admin' : 'user')),
+    role: String(fields.role || (fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user')),
+    planId: String(defaultPlanId),
     tokensUsed: toSafeNumber(fields.tokensUsed, 0),
-    tokenLimit: toSafeNumber(fields.tokenLimit, DEFAULT_TOKEN_LIMIT),
+    tokenLimit: toSafeNumber(fields.tokenLimit, Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit)),
   };
+}
+
+async function getPlanConfig(req) {
+  try {
+    const resp = await fetch(new URL('/plan-config.json', req.url), {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+    if (!resp.ok) return DEFAULT_PLAN_CONFIG;
+    const json = await resp.json();
+    return {
+      ...DEFAULT_PLAN_CONFIG,
+      ...json,
+      plans: {
+        ...DEFAULT_PLAN_CONFIG.plans,
+        ...(json?.plans || {}),
+      },
+    };
+  } catch {
+    return DEFAULT_PLAN_CONFIG;
+  }
+}
+
+function getAdminEmail(planConfig) {
+  return planConfig?.adminEmail || DEFAULT_PLAN_CONFIG.adminEmail;
+}
+
+function getDefaultPlanId(planConfig) {
+  return planConfig?.defaultPlanId || DEFAULT_PLAN_CONFIG.defaultPlanId;
+}
+
+function getPlanDefinition(planConfig, planId) {
+  const plans = planConfig?.plans || DEFAULT_PLAN_CONFIG.plans;
+  return plans[planId] || plans[getDefaultPlanId(planConfig)] || DEFAULT_PLAN_CONFIG.plans.free;
 }
 
 async function incrementUserTokensUsed(uid, tokenDelta) {
@@ -275,7 +333,12 @@ async function getGoogleAccessToken() {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
   if (!clientEmail || !privateKeyRaw) {
-    throw new Error('Missing FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY environment variable');
+    const missing = [];
+    if (!clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
+    if (!privateKeyRaw) missing.push('FIREBASE_PRIVATE_KEY');
+    throw new Error(
+      `Firebase usage-limit config is incomplete. Add ${missing.join(' and ')} in Vercel Project Settings > Environment Variables.`
+    );
   }
 
   const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
