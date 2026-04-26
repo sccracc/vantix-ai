@@ -65,6 +65,7 @@ export default async function handler(req) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(upstreamPayload),

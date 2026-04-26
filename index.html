@@ -4651,6 +4651,9 @@ async function postChatRequest(payload, signal) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
     },
     body: JSON.stringify(payload),
     signal,
