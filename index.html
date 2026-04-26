@@ -4344,7 +4344,13 @@ async function ensureSupabaseClient() {
   if (!normalizedUrl) return null;
   supabaseConfig.url = normalizedUrl;
   if (!hasRealSupabaseConfig()) return null;
-  supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey);
+  supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
   return supabaseClient;
 }
 
@@ -4426,7 +4432,9 @@ async function finalizeAuthFromUrl(client) {
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
-  const hasTokenFragment = !!hashParams.get('access_token');
+  const accessToken = hashParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token');
+  const hasTokenFragment = !!(accessToken && refreshToken);
 
   try {
     if (code && typeof client.auth.exchangeCodeForSession === 'function') {
@@ -4434,7 +4442,10 @@ async function finalizeAuthFromUrl(client) {
     } else if (tokenHash && type && typeof client.auth.verifyOtp === 'function') {
       await client.auth.verifyOtp({ token_hash: tokenHash, type });
     } else if (hasTokenFragment) {
-      // Supabase can auto-detect fragments; keep this branch for URL cleanup below.
+      await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
     } else {
       return;
     }
