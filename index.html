@@ -556,6 +556,12 @@ select:focus:not(:focus-visible) {
   gap: 10px;
 }
 
+.usage-plan-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .usage-plan-label {
   font-size: 11px;
   text-transform: uppercase;
@@ -3872,7 +3878,6 @@ body::before {
         <div class="auth-user" id="auth-user" hidden>
           <div class="auth-user-label">Signed in as</div>
           <div class="auth-user-email" id="auth-user-email"></div>
-          <button class="sidebar-btn" type="button" id="admin-panel-btn" hidden>Admin Panel</button>
           <button class="sidebar-btn" type="button" id="signout-btn">Sign Out</button>
         </div>
       </div>
@@ -3880,7 +3885,10 @@ body::before {
       <div class="usage-card" id="usage-card">
         <div class="usage-plan-row">
           <div class="usage-plan-label">Plan</div>
-          <div class="usage-plan-name" id="usage-plan-name">Free</div>
+          <div class="usage-plan-main">
+            <div class="usage-plan-name" id="usage-plan-name">Free</div>
+            <button class="sidebar-btn" type="button" id="usage-upgrade-btn">Upgrade</button>
+          </div>
         </div>
         <div class="usage-bar" id="usage-bar">
           <div class="usage-bar-fill" id="usage-bar-fill"></div>
@@ -4518,13 +4526,19 @@ let firebaseServices = {
   signInWithPopup: null,
   signOut: null,
   onAuthStateChanged: null,
+  collection: null,
+  query: null,
+  orderBy: null,
+  onSnapshot: null,
   doc: null,
   getDoc: null,
   setDoc: null,
+  deleteDoc: null,
   serverTimestamp: null,
 };
 let currentUser = null;
 window.isGodMode = false;
+let unsubscribeConversations = null;
 const CONTINUE_PROMPT_TEXT = 'Continue your previous assistant reply from exactly where it stopped. Output only the continuation—do not repeat paragraphs or code blocks you already sent.';
 let pendingConversationTitleIds = new Set();
 let composerHistoryState = {
@@ -4552,13 +4566,29 @@ let imageAnalysisRuntime = {
 // ============================================================
 // PERSISTENCE
 // ============================================================
-function loadState() {
+function readRawLocalState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const saved = JSON.parse(raw);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn('Local state read error:', e);
+    return null;
+  }
+}
+
+function getLegacyLocalConversationState() {
+  const saved = readRawLocalState();
+  return {
+    conversations: saved?.conversations || {},
+    currentConvId: saved?.currentConvId || null,
+  };
+}
+
+function loadState() {
+  try {
+    const saved = readRawLocalState();
+    if (saved) {
       // Merge carefully
-      state.conversations = saved.conversations || {};
       state.currentConvId = saved.currentConvId || null;
       state.settings = { ...state.settings, ...saved.settings };
       delete state.settings.maxTokens;
@@ -4582,21 +4612,6 @@ function loadState() {
       state.sessionUsage = { ...state.sessionUsage, ...(saved.sessionUsage || {}) };
       state.sessionStats = Array.isArray(saved.sessionStats) ? saved.sessionStats.slice(-50) : [];
       state.pendingBranchPoint = saved.pendingBranchPoint || null;
-      Object.values(state.conversations).forEach(conv => {
-        if (typeof conv.gemId !== 'string') conv.gemId = '';
-        if (!Array.isArray(conv.branches)) conv.branches = [];
-        if (!Array.isArray(conv.messages)) conv.messages = [];
-        conv.messages.forEach(msg => {
-          if (msg.role === 'assistant') {
-            if (typeof msg.assistantLabel !== 'string' || !msg.assistantLabel) {
-              msg.assistantLabel = PERSONA_META.vantix.assistantLabel;
-            }
-            if (typeof msg.assistantAvatar !== 'string' || !msg.assistantAvatar) {
-              msg.assistantAvatar = PERSONA_META.vantix.avatar;
-            }
-          }
-        });
-      });
       if (state.activeGemId && !state.gems.some(g => g.id === state.activeGemId)) {
         state.activeGemId = '';
       }
@@ -4606,8 +4621,124 @@ function loadState() {
 
 function saveState() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      currentConvId: state.currentConvId,
+      settings: state.settings,
+      theme: state.theme,
+      mode: state.mode,
+      memories: state.memories,
+      prompts: state.prompts,
+      gems: state.gems,
+      activeGemId: state.activeGemId,
+      thinkingEnabled: state.thinkingEnabled,
+      searchEnabled: state.searchEnabled,
+      imageAnalysisCache: state.imageAnalysisCache,
+      sessionUsage: state.sessionUsage,
+      sessionStats: state.sessionStats,
+      pendingBranchPoint: state.pendingBranchPoint,
+      persona: state.persona,
+    }));
   } catch(e) { console.warn('State save error:', e); }
+}
+
+function normalizeConversation(conv) {
+  if (!conv || typeof conv !== 'object') return null;
+  const normalized = {
+    id: String(conv.id || generateId()),
+    title: typeof conv.title === 'string' && conv.title.trim() ? conv.title : 'Conversation',
+    gemId: typeof conv.gemId === 'string' ? conv.gemId : '',
+    messages: Array.isArray(conv.messages) ? conv.messages : [],
+    branches: Array.isArray(conv.branches) ? conv.branches : [],
+    createdAt: Number(conv.createdAt || Date.now()),
+    updatedAt: Number(conv.updatedAt || Date.now()),
+  };
+  normalized.messages.forEach(msg => {
+    if (msg.role === 'assistant') {
+      if (typeof msg.assistantLabel !== 'string' || !msg.assistantLabel) {
+        msg.assistantLabel = PERSONA_META.vantix.assistantLabel;
+      }
+      if (typeof msg.assistantAvatar !== 'string' || !msg.assistantAvatar) {
+        msg.assistantAvatar = PERSONA_META.vantix.avatar;
+      }
+    }
+  });
+  return normalized;
+}
+
+function conversationDocRef(convId) {
+  if (!currentUser || !firebaseServices.db || !firebaseServices.doc) return null;
+  return firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid, 'conversations', convId);
+}
+
+async function persistConversationToFirestore(convOrId) {
+  const conv = typeof convOrId === 'string' ? state.conversations[convOrId] : convOrId;
+  if (!conv || !currentUser || !firebaseServices.db || !firebaseServices.setDoc || !firebaseServices.serverTimestamp) return;
+  try {
+    const normalized = normalizeConversation(conv);
+    const ref = conversationDocRef(normalized.id);
+    await firebaseServices.setDoc(ref, {
+      ...JSON.parse(JSON.stringify(normalized)),
+      lastUpdated: firebaseServices.serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Failed to persist conversation:', err);
+  }
+}
+
+async function deleteConversationFromFirestore(convId) {
+  if (!currentUser || !firebaseServices.deleteDoc) return;
+  try {
+    const ref = conversationDocRef(convId);
+    if (ref) await firebaseServices.deleteDoc(ref);
+  } catch (err) {
+    console.warn('Failed to delete conversation:', err);
+  }
+}
+
+async function migrateLegacyLocalConversations() {
+  if (!currentUser || !firebaseServices.db || !firebaseServices.setDoc) return;
+  const legacy = getLegacyLocalConversationState();
+  const conversations = Object.values(legacy.conversations || {}).map(normalizeConversation).filter(Boolean);
+  if (!conversations.length) return;
+
+  for (const conv of conversations) {
+    await persistConversationToFirestore(conv);
+  }
+
+  if (!state.currentConvId && legacy.currentConvId && legacy.conversations?.[legacy.currentConvId]) {
+    state.currentConvId = legacy.currentConvId;
+  }
+  saveState();
+}
+
+function subscribeToConversationList() {
+  if (!currentUser || !firebaseServices.collection || !firebaseServices.onSnapshot || !firebaseServices.orderBy || !firebaseServices.query) return;
+  if (unsubscribeConversations) {
+    unsubscribeConversations();
+    unsubscribeConversations = null;
+  }
+
+  const convCollection = firebaseServices.collection(firebaseServices.db, 'users', currentUser.uid, 'conversations');
+  const convQuery = firebaseServices.query(convCollection, firebaseServices.orderBy('lastUpdated', 'desc'));
+  unsubscribeConversations = firebaseServices.onSnapshot(convQuery, (snapshot) => {
+    const nextConversations = {};
+    snapshot.forEach(docSnap => {
+      const conv = normalizeConversation({ id: docSnap.id, ...docSnap.data() });
+      if (conv) nextConversations[conv.id] = conv;
+    });
+    state.conversations = nextConversations;
+
+    if (!state.currentConvId || !state.conversations[state.currentConvId]) {
+      state.currentConvId = Object.keys(nextConversations)[0] || null;
+    }
+
+    saveState();
+    renderChatList();
+    renderMessages('force');
+    updateChatTitle();
+  }, (err) => {
+    console.warn('Conversation listener failed:', err);
+  });
 }
 
 function hasFirebaseConfig() {
@@ -4675,14 +4806,23 @@ async function initFirebase() {
     firebaseServices.signInWithPopup = authMod.signInWithPopup;
     firebaseServices.signOut = authMod.signOut;
     firebaseServices.onAuthStateChanged = authMod.onAuthStateChanged;
+    firebaseServices.collection = firestoreMod.collection;
+    firebaseServices.query = firestoreMod.query;
+    firebaseServices.orderBy = firestoreMod.orderBy;
+    firebaseServices.onSnapshot = firestoreMod.onSnapshot;
     firebaseServices.doc = firestoreMod.doc;
     firebaseServices.getDoc = firestoreMod.getDoc;
     firebaseServices.setDoc = firestoreMod.setDoc;
+    firebaseServices.deleteDoc = firestoreMod.deleteDoc;
     firebaseServices.serverTimestamp = firestoreMod.serverTimestamp;
     firebaseServices.enabled = true;
     firebaseServices.ready = true;
 
     firebaseServices.onAuthStateChanged(firebaseServices.auth, async (user) => {
+      if (unsubscribeConversations) {
+        unsubscribeConversations();
+        unsubscribeConversations = null;
+      }
       currentUser = user || null;
       window.isGodMode = false;
       updateAuthUI();
@@ -4715,6 +4855,16 @@ async function initFirebase() {
         } catch (err) {
           console.warn('Failed to sync Firestore user record:', err);
         }
+
+        await migrateLegacyLocalConversations();
+        subscribeToConversationList();
+      } else {
+        state.conversations = {};
+        state.currentConvId = null;
+        saveState();
+        renderChatList();
+        renderMessages('force');
+        updateChatTitle();
       }
 
       renderUsageStats();
@@ -4727,28 +4877,26 @@ async function initFirebase() {
 }
 
 function updateAuthUI() {
+  const authPanel = document.querySelector('.auth-panel');
   const signInBtn = document.getElementById('google-signin-btn');
   const authUserEl = document.getElementById('auth-user');
   const emailEl = document.getElementById('auth-user-email');
-  const adminPanelBtn = document.getElementById('admin-panel-btn');
-  if (!signInBtn || !authUserEl || !emailEl || !adminPanelBtn) return;
+  if (!authPanel || !signInBtn || !authUserEl || !emailEl) return;
 
   if (!firebaseServices.enabled) {
-    signInBtn.disabled = true;
-    signInBtn.title = 'Add a valid Firebase config to enable Google sign-in';
-    authUserEl.hidden = true;
+    authPanel.hidden = true;
     emailEl.textContent = '';
-    adminPanelBtn.hidden = true;
     updateComposerAccess();
     renderUsageStats();
     return;
   }
 
-  signInBtn.disabled = !!currentUser;
-  signInBtn.title = currentUser ? 'Google account connected' : '';
+  authPanel.hidden = false;
+  signInBtn.hidden = !!currentUser;
+  signInBtn.disabled = false;
+  signInBtn.title = '';
   authUserEl.hidden = !currentUser;
   emailEl.textContent = currentUser?.email || '';
-  adminPanelBtn.hidden = currentUser?.email !== getAdminEmail();
   updateComposerAccess();
   renderUsageStats();
 }
@@ -4928,7 +5076,7 @@ function generateId() {
 
 function createConversation() {
   const id = generateId();
-  state.conversations[id] = {
+  state.conversations[id] = normalizeConversation({
     id,
     title: 'New Conversation',
     gemId: state.activeGemId || '',
@@ -4936,7 +5084,8 @@ function createConversation() {
     branches: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  };
+  });
+  persistConversationToFirestore(id);
   return id;
 }
 
@@ -4965,6 +5114,7 @@ function deleteConversation(id) {
     const ids = Object.keys(state.conversations);
     state.currentConvId = ids.length > 0 ? ids[ids.length - 1] : null;
   }
+  deleteConversationFromFirestore(id);
   renderChatList();
   renderMessages('force');
   updateChatTitle();
@@ -5033,6 +5183,7 @@ async function generateConversationTitle(conv, seedText) {
     conv.title = nextTitle;
     conv.updatedAt = Date.now();
     saveState();
+    persistConversationToFirestore(conv);
     renderChatList();
     if (state.currentConvId === conv.id) updateChatTitle();
   } catch (e) {
@@ -5617,6 +5768,7 @@ function setActiveGem(gemId) {
   if (conv) {
     conv.gemId = gemId || '';
     conv.updatedAt = Date.now();
+    persistConversationToFirestore(conv);
   }
   saveState();
   renderChatList();
@@ -6437,6 +6589,7 @@ async function sendMessage() {
   }
 
   conv.updatedAt = Date.now();
+  persistConversationToFirestore(conv);
 
   // Clear input
   textarea.value = '';
@@ -6470,7 +6623,9 @@ async function sendMessage() {
         errMsg.assistantLabel = identity.label;
         errMsg.assistantAvatar = identity.avatar;
       }
+      conv.updatedAt = Date.now();
       saveState();
+      persistConversationToFirestore(conv);
       renderMessages('force');
     }
   } finally {
@@ -6676,6 +6831,8 @@ async function streamResponse(conv, typingEl) {
   };
 
   conv.messages.push(assistantMsg);
+  conv.updatedAt = Date.now();
+  persistConversationToFirestore(conv);
   const assistantIdx = conv.messages.length - 1;
 
   const actionsEl = document.createElement('div');
@@ -6806,6 +6963,7 @@ async function continueAssistantResponse(assistantMsgIndex) {
 
   target.continued = true;
   saveState();
+  persistConversationToFirestore(conv);
   renderMessages('force');
 
   conv.messages.push({
@@ -6815,6 +6973,7 @@ async function continueAssistantResponse(assistantMsgIndex) {
   });
   conv.updatedAt = Date.now();
   saveState();
+  persistConversationToFirestore(conv);
   renderMessages('force');
 
   const typingEl = addTypingIndicator();
@@ -6833,7 +6992,9 @@ async function continueAssistantResponse(assistantMsgIndex) {
         latestAssistant.assistantLabel = identity.label;
         latestAssistant.assistantAvatar = identity.avatar;
       }
+      conv.updatedAt = Date.now();
       saveState();
+      persistConversationToFirestore(conv);
       renderMessages('force');
     }
   } finally {
@@ -6849,7 +7010,9 @@ async function regenerateMessage(msgIdx) {
 
   // Remove all messages from msgIdx onwards
   conv.messages = conv.messages.slice(0, msgIdx);
+  conv.updatedAt = Date.now();
   saveState();
+  persistConversationToFirestore(conv);
   renderMessages('force');
 
   const typingEl = addTypingIndicator();
@@ -7546,7 +7709,7 @@ function importConversationObject(data) {
     throw new Error('Invalid conversation JSON');
   }
   const id = generateId();
-  state.conversations[id] = {
+  state.conversations[id] = normalizeConversation({
     id,
     title: typeof data.title === 'string' && data.title.trim() ? data.title.trim() : 'Imported Conversation',
     gemId: typeof data.gemId === 'string' ? data.gemId : '',
@@ -7554,8 +7717,9 @@ function importConversationObject(data) {
     branches: Array.isArray(data.branches) ? data.branches : [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  };
+  });
   saveState();
+  persistConversationToFirestore(id);
   switchConversation(id);
   showToast('Conversation imported');
 }
@@ -8056,10 +8220,10 @@ function initEventListeners() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('topbar-settings-btn').addEventListener('click', openSettings);
   document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
-  document.getElementById('admin-panel-btn').addEventListener('click', () => {
-    showToast('Admin Panel placeholder');
-  });
   document.getElementById('signout-btn').addEventListener('click', signOutUser);
+  document.getElementById('usage-upgrade-btn').addEventListener('click', () => {
+    openModal('usage-limit-modal');
+  });
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('settings-cancel').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('settings-close').addEventListener('click', () => closeModal('settings-modal'));
@@ -8620,6 +8784,8 @@ async function streamResponse(conv, typingEl) {
   };
 
   conv.messages.push(assistantMsg);
+  conv.updatedAt = Date.now();
+  persistConversationToFirestore(conv);
   const assistantIdx = conv.messages.length - 1;
   msgWrapper.dataset.assistantIdx = assistantIdx;
 
