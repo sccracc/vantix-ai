@@ -4795,6 +4795,23 @@ function getDefaultTokenLimit() {
   return Number(getPlanDefinition(getDefaultPlanId()).tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit);
 }
 
+function resolveUserTokenLimit(userDoc = {}, role = 'user', planId = getDefaultPlanId()) {
+  const effectivePlanId = role === 'admin' ? 'god_mode' : planId;
+  const planDef = getPlanDefinition(effectivePlanId);
+  const planTokenLimit = Number(planDef.tokenLimit || getDefaultTokenLimit());
+  const storedTokenLimit = Number(userDoc.tokenLimit);
+  if (!Number.isFinite(storedTokenLimit)) return planTokenLimit;
+  if (storedTokenLimit === planTokenLimit) return storedTokenLimit;
+
+  const knownPlanLimits = new Set(
+    Object.values(planConfig?.plans || DEFAULT_PLAN_CONFIG.plans)
+      .map(plan => Number(plan?.tokenLimit))
+      .filter(Number.isFinite)
+  );
+
+  return knownPlanLimits.has(storedTokenLimit) ? planTokenLimit : storedTokenLimit;
+}
+
 async function loadPlanConfig() {
   try {
     const resp = await fetch('./plan-config.json', { cache: 'no-store' });
@@ -4867,6 +4884,9 @@ async function initFirebase() {
             window.isGodMode = true;
             showToast('God Mode Active: Welcome Socceracctiktok');
           }
+          const role = userDoc.role || (currentUser.email === getAdminEmail() ? 'admin' : 'user');
+          const planId = getStoredPlanId(userDoc);
+          const tokenLimit = resolveUserTokenLimit(userDoc, role, planId);
 
           await firebaseServices.setDoc(
             userRef,
@@ -4874,10 +4894,10 @@ async function initFirebase() {
               email: currentUser.email || '',
               displayName: currentUser.displayName || '',
               photoURL: currentUser.photoURL || '',
-              role: userDoc.role || (currentUser.email === getAdminEmail() ? 'admin' : 'user'),
-              plan: getStoredPlanId(userDoc),
-              planId: getStoredPlanId(userDoc),
-              tokenLimit: Number(userDoc.tokenLimit || getDefaultTokenLimit()),
+              role,
+              plan: planId,
+              planId,
+              tokenLimit,
               tokensUsed: Number(userDoc.tokensUsed || 0),
               lastLoginAt: firebaseServices.serverTimestamp(),
             },
@@ -7671,7 +7691,7 @@ async function renderUsageStats() {
     const role = userDoc.role === 'admin' || currentUser.email === getAdminEmail() ? 'admin' : 'user';
     const planId = getStoredPlanId(userDoc);
     const planDef = getPlanDefinition(role === 'admin' ? 'god_mode' : planId);
-    const tokenLimit = Number(userDoc.tokenLimit || planDef.tokenLimit || getDefaultTokenLimit());
+    const tokenLimit = resolveUserTokenLimit(userDoc, role, planId);
     const tokensUsed = Number(userDoc.tokensUsed || 0);
     state.usageProfile = {
       role,

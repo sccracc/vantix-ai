@@ -236,16 +236,23 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
   const fields = fromFirestoreFields(doc.fields || {});
   const defaultPlanId = getStoredPlanId(fields, planConfig);
   const defaultPlan = getPlanDefinition(planConfig, defaultPlanId);
+  const role = String(fields.role || (fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user'));
   const profile = {
     uid,
     email: String(fields.email || fallbackEmail || ''),
-    role: String(fields.role || (fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user')),
+    role,
     plan: String(defaultPlanId),
     planId: String(defaultPlanId),
     tokensUsed: toSafeNumber(fields.tokensUsed, 0),
-    tokenLimit: toSafeNumber(fields.tokenLimit, Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit)),
+    tokenLimit: resolveUserTokenLimit(fields, role, defaultPlanId, planConfig),
   };
-  if (!fields.role || !fields.plan || !fields.planId || typeof fields.tokenLimit === 'undefined') {
+  if (
+    !fields.role ||
+    !fields.plan ||
+    !fields.planId ||
+    typeof fields.tokenLimit === 'undefined' ||
+    Number(fields.tokenLimit) !== Number(profile.tokenLimit)
+  ) {
     await upsertUserProfileDefaults(uid, profile, accessToken, projectId);
   }
   return profile;
@@ -287,6 +294,23 @@ function getPlanDefinition(planConfig, planId) {
 
 function getStoredPlanId(fields = {}, planConfig = DEFAULT_PLAN_CONFIG) {
   return String(fields.plan || fields.planId || getDefaultPlanId(planConfig));
+}
+
+function resolveUserTokenLimit(fields = {}, role = 'user', planId = getDefaultPlanId(DEFAULT_PLAN_CONFIG), planConfig = DEFAULT_PLAN_CONFIG) {
+  const effectivePlanId = role === 'admin' ? 'god_mode' : planId;
+  const planDef = getPlanDefinition(planConfig, effectivePlanId);
+  const planTokenLimit = Number(planDef.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit);
+  const storedTokenLimit = Number(fields.tokenLimit);
+  if (!Number.isFinite(storedTokenLimit)) return planTokenLimit;
+  if (storedTokenLimit === planTokenLimit) return storedTokenLimit;
+
+  const knownPlanLimits = new Set(
+    Object.values(planConfig?.plans || DEFAULT_PLAN_CONFIG.plans)
+      .map(plan => Number(plan?.tokenLimit))
+      .filter(Number.isFinite)
+  );
+
+  return knownPlanLimits.has(storedTokenLimit) ? planTokenLimit : storedTokenLimit;
 }
 
 async function upsertUserProfileDefaults(uid, profile, accessToken, projectId) {
