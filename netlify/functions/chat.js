@@ -22,25 +22,57 @@ function getBearerToken(event) {
   return authHeader.slice('Bearer '.length).trim();
 }
 
+function parseJwtPayload(token) {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const normalized = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    return JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
 async function validateSupabaseToken(accessToken) {
   const supabaseUrl = process.env.SUPABASE_URL || '';
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const anonKey = process.env.SUPABASE_ANON_KEY || '';
-  const supabaseKey = serviceRoleKey || anonKey;
+  const tokenPayload = parseJwtPayload(accessToken);
+  const tokenIssuer = tokenPayload?.iss || '';
+  const configuredHost = (() => {
+    try { return new URL(supabaseUrl).host; } catch (_) { return ''; }
+  })();
+  const issuerHost = (() => {
+    try { return tokenIssuer ? new URL(tokenIssuer).host : ''; } catch (_) { return ''; }
+  })();
 
-  if (!supabaseUrl || !supabaseKey) {
+  if (!supabaseUrl || (!serviceRoleKey && !anonKey)) {
     return { ok: false, reason: 'Supabase server configuration is missing.' };
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data, error } = await supabase.auth.getUser(accessToken);
-  if (error || !data?.user) {
-    return { ok: false, reason: 'Invalid or expired session token.' };
+  if (issuerHost && configuredHost && issuerHost !== configuredHost) {
+    return {
+      ok: false,
+      reason: `Session token is for ${issuerHost}, but server is configured for ${configuredHost}.`,
+    };
   }
-  return { ok: true, user: data.user };
+  if (typeof tokenPayload?.exp === 'number' && (tokenPayload.exp * 1000) <= Date.now()) {
+    return { ok: false, reason: 'Session token is expired.' };
+  }
+
+  const keysToTry = [serviceRoleKey, anonKey].filter(Boolean);
+  let lastError = '';
+  for (const key of keysToTry) {
+    const supabase = createClient(supabaseUrl, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await supabase.auth.getUser(accessToken);
+    if (!error && data?.user) {
+      return { ok: true, user: data.user };
+    }
+    lastError = error?.message || lastError;
+  }
+  return { ok: false, reason: `Invalid session token. ${lastError}`.trim() };
 }
 
 exports.handler = async function handler(event) {
