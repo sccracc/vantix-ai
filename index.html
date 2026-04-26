@@ -4383,8 +4383,38 @@ function ensureSignedInToken() {
   return token;
 }
 
+async function getValidAccessToken() {
+  const cached = userAuthToken();
+  if (cached) return cached;
+
+  const client = await ensureSupabaseClient();
+  if (!client) return '';
+
+  try {
+    const { data } = await client.auth.getSession();
+    const liveToken = data?.session?.access_token || '';
+    if (liveToken) {
+      setUserSession(data.session);
+      return liveToken;
+    }
+
+    if (typeof client.auth.refreshSession === 'function') {
+      const refreshed = await client.auth.refreshSession();
+      const refreshedToken = refreshed?.data?.session?.access_token || '';
+      if (refreshedToken) {
+        setUserSession(refreshed.data.session);
+        return refreshedToken;
+      }
+    }
+  } catch (err) {
+    console.warn('Access token refresh failed:', err);
+  }
+
+  return '';
+}
+
 async function callDeepSeekAPI(payload, options = {}) {
-  const token = ensureSignedInToken();
+  const token = await getValidAccessToken();
   if (!token) {
     throw new Error('Please sign in with your magic link to continue.');
   }
