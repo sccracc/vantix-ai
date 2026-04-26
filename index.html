@@ -539,6 +539,62 @@ select:focus:not(:focus-visible) {
   color: var(--text-secondary);
 }
 
+.usage-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.03);
+}
+
+.usage-plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.usage-plan-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.usage-plan-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.usage-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  transition: width var(--transition-fast);
+}
+
+.usage-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.upgrade-btn {
+  width: 100%;
+  margin-top: 10px;
+}
+
 /* ============================================================
    MAIN CONTENT AREA
    ============================================================ */
@@ -3816,8 +3872,20 @@ body::before {
         <div class="auth-user" id="auth-user" hidden>
           <div class="auth-user-label">Signed in as</div>
           <div class="auth-user-email" id="auth-user-email"></div>
+          <button class="sidebar-btn" type="button" id="admin-panel-btn" hidden>Admin Panel</button>
           <button class="sidebar-btn" type="button" id="signout-btn">Sign Out</button>
         </div>
+      </div>
+
+      <div class="usage-card" id="usage-card">
+        <div class="usage-plan-row">
+          <div class="usage-plan-label">Plan</div>
+          <div class="usage-plan-name" id="usage-plan-name">Free</div>
+        </div>
+        <div class="usage-bar" id="usage-bar">
+          <div class="usage-bar-fill" id="usage-bar-fill"></div>
+        </div>
+        <div class="usage-meta" id="usage-meta">Sign in to view usage.</div>
       </div>
 
       <button class="btn-new-chat" id="new-chat-btn">
@@ -4160,6 +4228,19 @@ body::before {
   </div>
 </div>
 
+<div class="modal-overlay" id="usage-limit-modal">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <div class="modal-title">Monthly Limit Reached</div>
+      <button class="modal-close" id="usage-limit-close">✕</button>
+    </div>
+    <p class="form-hint">Your current plan has reached its monthly token limit. Upgrade to continue chatting.</p>
+    <div class="modal-footer">
+      <button class="btn-primary upgrade-btn" id="upgrade-pro-btn" type="button">Upgrade to Pro</button>
+    </div>
+  </div>
+</div>
+
 <!-- MEMORY MODAL -->
 <div class="modal-overlay" id="memory-modal">
   <div class="modal">
@@ -4300,6 +4381,8 @@ const BRAND_MODEL_LABEL = 'Vantix AI Core';
 const API_MODEL_ID = [100, 101, 101, 112, 115, 101, 101, 107, 45, 99, 104, 97, 116].map(code => String.fromCharCode(code)).join('');
 const API_URL = '/api/chat';
 const BUILD_ID = '2026-04-26-stream-debug-4';
+const ADMIN_EMAIL = 'socceracctiktok@gmail.com';
+const DEFAULT_TOKEN_LIMIT = 100000;
 const FIREBASE_VERSION = '10.12.5';
 const FIREBASE_CONFIG = window.VANTIX_FIREBASE_CONFIG || {
   apiKey: "AIzaSyDtzJtUtMKPS84G9-0p1S1hHA_DsNYG-JM",
@@ -4387,6 +4470,11 @@ let state = {
   sessionStats: [],
   pendingBranchPoint: null,
   persona: 'vantix',
+  usageProfile: {
+    role: 'user',
+    tokensUsed: 0,
+    tokenLimit: DEFAULT_TOKEN_LIMIT,
+  },
 };
 
 const PERSONA_META = {
@@ -4554,7 +4642,7 @@ async function initFirebase() {
           const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
           const userSnap = firebaseServices.getDoc ? await firebaseServices.getDoc(userRef) : null;
           const userDoc = userSnap && userSnap.exists() ? (userSnap.data() || {}) : {};
-          if (userDoc.role === 'admin') {
+          if (userDoc.role === 'admin' || currentUser.email === ADMIN_EMAIL) {
             window.isGodMode = true;
             showToast('God Mode Active: Welcome Socceracctiktok');
           }
@@ -4565,6 +4653,9 @@ async function initFirebase() {
               email: currentUser.email || '',
               displayName: currentUser.displayName || '',
               photoURL: currentUser.photoURL || '',
+              role: userDoc.role || (currentUser.email === ADMIN_EMAIL ? 'admin' : 'user'),
+              tokenLimit: Number(userDoc.tokenLimit || DEFAULT_TOKEN_LIMIT),
+              tokensUsed: Number(userDoc.tokensUsed || 0),
               lastLoginAt: firebaseServices.serverTimestamp(),
             },
             { merge: true }
@@ -4573,6 +4664,8 @@ async function initFirebase() {
           console.warn('Failed to sync Firestore user record:', err);
         }
       }
+
+      renderUsageStats();
     });
   } catch (err) {
     console.warn('Firebase initialization failed:', err);
@@ -4585,14 +4678,17 @@ function updateAuthUI() {
   const signInBtn = document.getElementById('google-signin-btn');
   const authUserEl = document.getElementById('auth-user');
   const emailEl = document.getElementById('auth-user-email');
-  if (!signInBtn || !authUserEl || !emailEl) return;
+  const adminPanelBtn = document.getElementById('admin-panel-btn');
+  if (!signInBtn || !authUserEl || !emailEl || !adminPanelBtn) return;
 
   if (!firebaseServices.enabled) {
     signInBtn.disabled = true;
     signInBtn.title = 'Add a valid Firebase config to enable Google sign-in';
     authUserEl.hidden = true;
     emailEl.textContent = '';
+    adminPanelBtn.hidden = true;
     updateComposerAccess();
+    renderUsageStats();
     return;
   }
 
@@ -4600,7 +4696,9 @@ function updateAuthUI() {
   signInBtn.title = currentUser ? 'Google account connected' : '';
   authUserEl.hidden = !currentUser;
   emailEl.textContent = currentUser?.email || '';
+  adminPanelBtn.hidden = currentUser?.email !== ADMIN_EMAIL;
   updateComposerAccess();
+  renderUsageStats();
 }
 
 function canUseChat() {
@@ -4666,6 +4764,8 @@ async function postChatRequest(payload, signal) {
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
+      ...(currentUser?.uid ? { 'X-Vantix-Uid': currentUser.uid } : {}),
+      ...(currentUser?.email ? { 'X-Vantix-Email': currentUser.email } : {}),
     },
     body: JSON.stringify(payload),
     signal,
@@ -4674,12 +4774,18 @@ async function postChatRequest(payload, signal) {
   if (!response.ok) {
     const fallbackMessage = `API error ${response.status}`;
     const responseText = await response.text().catch(() => '');
+    let message = responseText || fallbackMessage;
     try {
       const json = JSON.parse(responseText);
-      throw new Error(json.error?.message || fallbackMessage);
+      message = json.error?.message || fallbackMessage;
     } catch {
-      throw new Error(responseText || fallbackMessage);
+      message = responseText || fallbackMessage;
     }
+    if (response.status === 403 && message === 'Usage limit reached') {
+      openModal('usage-limit-modal');
+      renderUsageStats();
+    }
+    throw new Error(message);
   }
 
   if (!response.body) {
@@ -4755,6 +4861,9 @@ async function collectChatText(payload, signal) {
       text += chunk;
     },
   });
+  if (currentUser) {
+    renderUsageStats();
+  }
   return text;
 }
 
@@ -6298,6 +6407,9 @@ async function sendMessage() {
   } catch(e) {
     typingEl.remove();
     if (e.name !== 'AbortError') {
+      if (e.message === 'Usage limit reached') {
+        return;
+      }
       // Show error message
       const errMsg = { role: 'assistant', content: `⚠️ **Error:** ${e.message}\n\nPlease try again in a moment.` };
       conv.messages.push(errMsg);
@@ -7283,6 +7395,59 @@ function formatSessionUsageText() {
   return `Assistant: ${modelId}, Tokens used this session: ${totalTokens.toLocaleString()}, Est. cost: $${estimatedCost.toFixed(4)}`;
 }
 
+async function renderUsageStats() {
+  const usageCard = document.getElementById('usage-card');
+  const planNameEl = document.getElementById('usage-plan-name');
+  const usageBarEl = document.getElementById('usage-bar');
+  const usageFillEl = document.getElementById('usage-bar-fill');
+  const usageMetaEl = document.getElementById('usage-meta');
+  if (!usageCard || !planNameEl || !usageBarEl || !usageFillEl || !usageMetaEl) return;
+
+  if (!firebaseServices.enabled || !currentUser || !firebaseServices.db || !firebaseServices.doc || !firebaseServices.getDoc) {
+    state.usageProfile = {
+      role: 'user',
+      tokensUsed: 0,
+      tokenLimit: DEFAULT_TOKEN_LIMIT,
+    };
+    planNameEl.textContent = 'Free';
+    usageBarEl.hidden = false;
+    usageFillEl.style.width = '0%';
+    usageMetaEl.textContent = firebaseServices.enabled ? 'Sign in to view usage.' : 'Google sign-in required.';
+    return;
+  }
+
+  try {
+    const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
+    const userSnap = await firebaseServices.getDoc(userRef);
+    const userDoc = userSnap.exists() ? (userSnap.data() || {}) : {};
+    const role = userDoc.role === 'admin' || currentUser.email === ADMIN_EMAIL ? 'admin' : 'user';
+    const tokenLimit = Number(userDoc.tokenLimit || DEFAULT_TOKEN_LIMIT);
+    const tokensUsed = Number(userDoc.tokensUsed || 0);
+    state.usageProfile = {
+      role,
+      tokenLimit,
+      tokensUsed,
+    };
+
+    if (role === 'admin') {
+      planNameEl.textContent = 'God Mode';
+      usageBarEl.hidden = true;
+      usageMetaEl.textContent = 'Unlimited admin usage.';
+      return;
+    }
+
+    const pct = Math.max(0, Math.min(100, (tokensUsed / Math.max(1, tokenLimit)) * 100));
+    planNameEl.textContent = 'Free';
+    usageBarEl.hidden = false;
+    usageFillEl.style.width = `${pct}%`;
+    usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} tokens used`;
+  } catch (err) {
+    usageBarEl.hidden = false;
+    usageFillEl.style.width = '0%';
+    usageMetaEl.textContent = 'Unable to load usage right now.';
+  }
+}
+
 function renderSessionUsage() {
   const text = formatSessionUsageText();
   const footerEl = document.getElementById('session-usage');
@@ -7826,10 +7991,18 @@ function initEventListeners() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('topbar-settings-btn').addEventListener('click', openSettings);
   document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
+  document.getElementById('admin-panel-btn').addEventListener('click', () => {
+    showToast('Admin Panel placeholder');
+  });
   document.getElementById('signout-btn').addEventListener('click', signOutUser);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('settings-cancel').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('settings-close').addEventListener('click', () => closeModal('settings-modal'));
+  document.getElementById('usage-limit-close').addEventListener('click', () => closeModal('usage-limit-modal'));
+  document.getElementById('upgrade-pro-btn').addEventListener('click', () => {
+    closeModal('usage-limit-modal');
+    showToast('Upgrade to Pro placeholder');
+  });
   // Sliders
   document.getElementById('temp-slider').addEventListener('input', (e) => {
     const v = parseFloat(e.target.value).toFixed(1);
@@ -8423,6 +8596,7 @@ async function streamResponse(conv, typingEl) {
 
   bodyEl.appendChild(actionsEl);
   if (lastUsage) updateSessionUsage(lastUsage);
+  if (currentUser) renderUsageStats();
   refreshSpeakButtons();
   requestAnimationFrame(() => {
     updateAutoScrollPill();
