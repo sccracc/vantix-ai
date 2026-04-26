@@ -4415,10 +4415,12 @@ let firebaseServices = {
   signOut: null,
   onAuthStateChanged: null,
   doc: null,
+  getDoc: null,
   setDoc: null,
   serverTimestamp: null,
 };
 let currentUser = null;
+window.isGodMode = false;
 const CONTINUE_PROMPT_TEXT = 'Continue your previous assistant reply from exactly where it stopped. Output only the continuation—do not repeat paragraphs or code blocks you already sent.';
 let pendingConversationTitleIds = new Set();
 let composerHistoryState = {
@@ -4535,6 +4537,7 @@ async function initFirebase() {
     firebaseServices.signOut = authMod.signOut;
     firebaseServices.onAuthStateChanged = authMod.onAuthStateChanged;
     firebaseServices.doc = firestoreMod.doc;
+    firebaseServices.getDoc = firestoreMod.getDoc;
     firebaseServices.setDoc = firestoreMod.setDoc;
     firebaseServices.serverTimestamp = firestoreMod.serverTimestamp;
     firebaseServices.enabled = true;
@@ -4542,13 +4545,22 @@ async function initFirebase() {
 
     firebaseServices.onAuthStateChanged(firebaseServices.auth, async (user) => {
       currentUser = user || null;
+      window.isGodMode = false;
       updateAuthUI();
       updateApiStatus();
 
       if (currentUser && firebaseServices.db) {
         try {
+          const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
+          const userSnap = firebaseServices.getDoc ? await firebaseServices.getDoc(userRef) : null;
+          const userDoc = userSnap && userSnap.exists() ? (userSnap.data() || {}) : {};
+          if (userDoc.role === 'admin') {
+            window.isGodMode = true;
+            showToast('God Mode Active: Welcome Socceracctiktok');
+          }
+
           await firebaseServices.setDoc(
-            firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid),
+            userRef,
             {
               email: currentUser.email || '',
               displayName: currentUser.displayName || '',
