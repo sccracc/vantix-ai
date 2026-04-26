@@ -8259,7 +8259,13 @@ async function streamResponse(conv, typingEl) {
         });
         bodyEl.insertBefore(thinkingBlockEl, contentEl);
       }
-      thinkingBlockEl.querySelector('.thinking-body').innerHTML = `<div class="thinking-text">${escapeHtml(pendingReasoning)}</div>`;
+      let thinkingTextEl = thinkingBlockEl.querySelector('.thinking-text');
+      if (!thinkingTextEl) {
+        thinkingTextEl = document.createElement('div');
+        thinkingTextEl.className = 'thinking-text';
+        thinkingBlockEl.querySelector('.thinking-body').appendChild(thinkingTextEl);
+      }
+      thinkingTextEl.textContent = pendingReasoning;
     }
 
     if (contentQueue) {
@@ -8269,8 +8275,7 @@ async function streamResponse(conv, typingEl) {
     }
 
     if (renderedContent) {
-      contentEl.innerHTML = renderMarkdown(renderedContent);
-      if (renderedContent.includes('```')) enhanceCodeBlocks(contentEl);
+      contentEl.textContent = renderedContent;
     }
 
     const now = Date.now();
@@ -8316,6 +8321,8 @@ async function streamResponse(conv, typingEl) {
   paintStreamFrame();
   scrollToBottomIfPinned(false);
   contentEl.classList.remove('stream-cursor');
+  contentEl.innerHTML = renderMarkdown(accumulatedContent);
+  if (accumulatedContent.includes('```')) enhanceCodeBlocks(contentEl);
 
   const assistantMsg = {
     role: 'assistant',
