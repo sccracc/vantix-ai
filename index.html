@@ -4782,6 +4782,10 @@ function getDefaultPlanId() {
   return planConfig?.defaultPlanId || DEFAULT_PLAN_CONFIG.defaultPlanId;
 }
 
+function getStoredPlanId(userDoc = {}) {
+  return String(userDoc.plan || userDoc.planId || getDefaultPlanId());
+}
+
 function getPlanDefinition(planId) {
   const plans = planConfig?.plans || DEFAULT_PLAN_CONFIG.plans;
   return plans[planId] || plans[getDefaultPlanId()] || DEFAULT_PLAN_CONFIG.plans.free;
@@ -4871,7 +4875,8 @@ async function initFirebase() {
               displayName: currentUser.displayName || '',
               photoURL: currentUser.photoURL || '',
               role: userDoc.role || (currentUser.email === getAdminEmail() ? 'admin' : 'user'),
-              planId: userDoc.planId || getDefaultPlanId(),
+              plan: getStoredPlanId(userDoc),
+              planId: getStoredPlanId(userDoc),
               tokenLimit: Number(userDoc.tokenLimit || getDefaultTokenLimit()),
               tokensUsed: Number(userDoc.tokensUsed || 0),
               lastLoginAt: firebaseServices.serverTimestamp(),
@@ -7664,7 +7669,7 @@ async function renderUsageStats() {
     const userSnap = await firebaseServices.getDoc(userRef);
     const userDoc = userSnap.exists() ? (userSnap.data() || {}) : {};
     const role = userDoc.role === 'admin' || currentUser.email === getAdminEmail() ? 'admin' : 'user';
-    const planId = userDoc.planId || getDefaultPlanId();
+    const planId = getStoredPlanId(userDoc);
     const planDef = getPlanDefinition(role === 'admin' ? 'god_mode' : planId);
     const tokenLimit = Number(userDoc.tokenLimit || planDef.tokenLimit || getDefaultTokenLimit());
     const tokensUsed = Number(userDoc.tokensUsed || 0);

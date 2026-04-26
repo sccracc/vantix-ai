@@ -218,6 +218,7 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
       uid,
       email: fallbackEmail || '',
       role: fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user',
+      plan: defaultPlanId,
       planId: defaultPlanId,
       tokensUsed: 0,
       tokenLimit: Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit),
@@ -231,12 +232,13 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
 
   const doc = await resp.json();
   const fields = fromFirestoreFields(doc.fields || {});
-  const defaultPlanId = fields.planId || getDefaultPlanId(planConfig);
+  const defaultPlanId = getStoredPlanId(fields, planConfig);
   const defaultPlan = getPlanDefinition(planConfig, defaultPlanId);
   return {
     uid,
     email: String(fields.email || fallbackEmail || ''),
     role: String(fields.role || (fallbackEmail === getAdminEmail(planConfig) ? 'admin' : 'user')),
+    plan: String(defaultPlanId),
     planId: String(defaultPlanId),
     tokensUsed: toSafeNumber(fields.tokensUsed, 0),
     tokenLimit: toSafeNumber(fields.tokenLimit, Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit)),
@@ -275,6 +277,10 @@ function getDefaultPlanId(planConfig) {
 function getPlanDefinition(planConfig, planId) {
   const plans = planConfig?.plans || DEFAULT_PLAN_CONFIG.plans;
   return plans[planId] || plans[getDefaultPlanId(planConfig)] || DEFAULT_PLAN_CONFIG.plans.free;
+}
+
+function getStoredPlanId(fields = {}, planConfig = DEFAULT_PLAN_CONFIG) {
+  return String(fields.plan || fields.planId || getDefaultPlanId(planConfig));
 }
 
 async function incrementUserTokensUsed(uid, tokenDelta) {
