@@ -8243,10 +8243,7 @@ async function streamResponse(conv, typingEl) {
 
   scrollToBottomIfPinned();
 
-  let rafPending = false;
   let pendingReasoning = '';
-  let renderedContent = '';
-  let contentQueue = '';
   let lastScrollTime = 0;
   let lastFinishReason = null;
   let lastUsage = null;
@@ -8277,14 +8274,8 @@ async function streamResponse(conv, typingEl) {
       thinkingTextEl.textContent = pendingReasoning;
     }
 
-    if (contentQueue) {
-      const revealCount = Math.max(1, Math.ceil(contentQueue.length / 12));
-      renderedContent += contentQueue.slice(0, revealCount);
-      contentQueue = contentQueue.slice(revealCount);
-    }
-
-    if (renderedContent) {
-      contentEl.textContent = renderedContent;
+    if (accumulatedContent) {
+      contentEl.textContent = accumulatedContent;
     }
 
     const now = Date.now();
@@ -8292,17 +8283,6 @@ async function streamResponse(conv, typingEl) {
       lastScrollTime = now;
       scrollToBottomIfPinned(false);
     }
-
-    if (contentQueue) queueStreamPaint();
-  }
-
-  function queueStreamPaint() {
-    if (rafPending) return;
-    rafPending = true;
-    requestAnimationFrame(() => {
-      rafPending = false;
-      paintStreamFrame();
-    });
   }
 
   await consumeChatStream(response, {
@@ -8315,17 +8295,14 @@ async function streamResponse(conv, typingEl) {
     onReasoning(chunk) {
       accumulatedReasoning += chunk;
       pendingReasoning = accumulatedReasoning;
-      queueStreamPaint();
+      paintStreamFrame();
     },
     onContent(chunk) {
       accumulatedContent += chunk;
-      contentQueue += chunk;
-      queueStreamPaint();
+      paintStreamFrame();
     },
   });
 
-  renderedContent = accumulatedContent;
-  contentQueue = '';
   pendingReasoning = accumulatedReasoning;
   paintStreamFrame();
   scrollToBottomIfPinned(false);
