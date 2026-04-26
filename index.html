@@ -4303,6 +4303,21 @@ function hasRealSupabaseConfig(config = supabaseConfig) {
   return true;
 }
 
+function normalizeSupabaseUrl(rawUrl) {
+  const text = String(rawUrl || '').trim();
+  if (!text || text.includes('YOUR_SUPABASE_URL')) return '';
+  try {
+    const parsed = new URL(text);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+function buildSafeAuthRedirectUrl() {
+  return `${window.location.origin}/`;
+}
+
 async function fetchSupabasePublicConfig() {
   try {
     const resp = await fetch('/.netlify/functions/public-config', { method: 'GET' });
@@ -4322,6 +4337,9 @@ async function ensureSupabaseClient() {
     const fetched = await fetchSupabasePublicConfig();
     if (fetched) supabaseConfig = fetched;
   }
+  const normalizedUrl = normalizeSupabaseUrl(supabaseConfig.url);
+  if (!normalizedUrl) return null;
+  supabaseConfig.url = normalizedUrl;
   if (!hasRealSupabaseConfig()) return null;
   supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey);
   return supabaseClient;
@@ -4409,9 +4427,10 @@ async function signInWithMagicLink() {
   const email = window.prompt('Enter your email to receive a Vantix AI magic link');
   if (!email || !email.trim()) return;
   try {
+    const emailRedirectTo = buildSafeAuthRedirectUrl();
     const { error } = await client.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin + window.location.pathname }
+      options: { emailRedirectTo }
     });
 
     if (error) {
