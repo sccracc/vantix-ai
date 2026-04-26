@@ -601,6 +601,122 @@ select:focus:not(:focus-visible) {
   margin-top: 10px;
 }
 
+.pricing-modal {
+  max-width: 1080px;
+}
+
+.pricing-intro {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 18px;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pricing-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 82%, transparent), color-mix(in srgb, var(--bg-elevated) 92%, transparent)),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent-2) 16%, transparent), transparent 42%);
+  min-height: 280px;
+}
+
+.pricing-card.popular {
+  border-color: color-mix(in srgb, var(--accent-2) 48%, var(--border));
+  box-shadow: 0 18px 48px rgba(59, 130, 246, 0.16);
+}
+
+.pricing-card.current {
+  border-color: color-mix(in srgb, var(--accent-1) 38%, var(--border));
+}
+
+.pricing-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--accent-2) 24%, transparent);
+  color: var(--accent-2);
+}
+
+.pricing-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pricing-name {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pricing-price {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.pricing-price span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pricing-feature-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pricing-feature-list li {
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-input) 90%, transparent);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.pricing-action {
+  margin-top: auto;
+}
+
+.pricing-disclaimer {
+  margin-top: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .pricing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ============================================================
    MAIN CONTENT AREA
    ============================================================ */
@@ -3887,7 +4003,7 @@ body::before {
           <div class="usage-plan-label">Plan</div>
           <div class="usage-plan-main">
             <div class="usage-plan-name" id="usage-plan-name">Free</div>
-            <button class="sidebar-btn" type="button" id="usage-upgrade-btn">Upgrade</button>
+            <button class="sidebar-btn upgrade-btn" type="button" id="usage-upgrade-btn">Upgrade to Pro</button>
           </div>
         </div>
         <div class="usage-bar" id="usage-bar">
@@ -4249,6 +4365,76 @@ body::before {
   </div>
 </div>
 
+<div class="modal-overlay" id="pricing-modal">
+  <div class="modal pricing-modal">
+    <div class="modal-header">
+      <div class="modal-title">Choose Your Plan</div>
+      <button class="modal-close" id="pricing-close">✕</button>
+    </div>
+    <p class="pricing-intro">Select the plan that matches your usage. Paid plans launch Stripe Checkout. Existing subscribers can manage billing from the sidebar.</p>
+    <div class="pricing-grid">
+      <div class="pricing-card" data-plan-card="free">
+        <div class="pricing-tier">
+          <div class="pricing-name">Free</div>
+          <div class="pricing-price">$0 <span>/ month</span></div>
+        </div>
+        <ul class="pricing-feature-list">
+          <li>10,000 Tokens</li>
+          <li>Standard Speed</li>
+          <li>Basic Memory</li>
+        </ul>
+        <div class="pricing-action">
+          <button class="btn-secondary pricing-select-btn" type="button" data-plan-id="free">Current Free Plan</button>
+        </div>
+      </div>
+      <div class="pricing-card" data-plan-card="starter">
+        <div class="pricing-tier">
+          <div class="pricing-name">Starter</div>
+          <div class="pricing-price">$10 <span>/ month</span></div>
+        </div>
+        <ul class="pricing-feature-list">
+          <li>1,000,000 Tokens</li>
+          <li>Fast Speed</li>
+          <li>Full History</li>
+        </ul>
+        <div class="pricing-action">
+          <button class="btn-primary pricing-select-btn" type="button" data-plan-id="starter">Choose Starter</button>
+        </div>
+      </div>
+      <div class="pricing-card popular" data-plan-card="pro">
+        <div class="pricing-badge">Most Popular</div>
+        <div class="pricing-tier">
+          <div class="pricing-name">Pro</div>
+          <div class="pricing-price">$20 <span>/ month</span></div>
+        </div>
+        <ul class="pricing-feature-list">
+          <li>5,000,000 Tokens</li>
+          <li>Priority Access</li>
+          <li>Advanced Tools</li>
+        </ul>
+        <div class="pricing-action">
+          <button class="btn-primary pricing-select-btn" type="button" data-plan-id="pro">Choose Pro</button>
+        </div>
+      </div>
+      <div class="pricing-card" data-plan-card="ultra">
+        <div class="pricing-tier">
+          <div class="pricing-name">Ultra</div>
+          <div class="pricing-price">$50 <span>/ month</span></div>
+        </div>
+        <ul class="pricing-feature-list">
+          <li>25,000,000 Tokens</li>
+          <li>God-Tier Speed</li>
+          <li>24/7 Support</li>
+        </ul>
+        <div class="pricing-action">
+          <button class="btn-primary pricing-select-btn" type="button" data-plan-id="ultra">Choose Ultra</button>
+        </div>
+      </div>
+    </div>
+    <div class="pricing-disclaimer">The usage panel syncs from the Firestore user record. Admin accounts always stay in God Mode.</div>
+  </div>
+</div>
+
 <!-- MEMORY MODAL -->
 <div class="modal-overlay" id="memory-modal">
   <div class="modal">
@@ -4395,11 +4581,31 @@ const DEFAULT_PLAN_CONFIG = {
   plans: {
     free: {
       label: 'Free',
-      tokenLimit: 100000,
+      priceUsd: 0,
+      tokenLimit: 10000,
+      showProgressBar: true,
+    },
+    starter: {
+      label: 'Starter',
+      priceUsd: 10,
+      tokenLimit: 1000000,
+      showProgressBar: true,
+    },
+    pro: {
+      label: 'Pro',
+      priceUsd: 20,
+      tokenLimit: 5000000,
+      showProgressBar: true,
+    },
+    ultra: {
+      label: 'Ultra',
+      priceUsd: 50,
+      tokenLimit: 25000000,
       showProgressBar: true,
     },
     god_mode: {
       label: 'God Mode',
+      priceUsd: 0,
       tokenLimit: 999999999,
       showProgressBar: false,
     },
@@ -4795,6 +5001,22 @@ function getDefaultTokenLimit() {
   return Number(getPlanDefinition(getDefaultPlanId()).tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit);
 }
 
+function isAdminEmail(email = '') {
+  return String(email || '').toLowerCase() === String(getAdminEmail() || '').toLowerCase();
+}
+
+function isAdminRole(role = '') {
+  return String(role || '').toLowerCase() === 'admin';
+}
+
+function isAdminUserRecord(userDoc = {}) {
+  return !!(window.isGodMode || isAdminRole(userDoc.role) || isAdminEmail(userDoc.email || currentUser?.email || ''));
+}
+
+function getUsageRole(userDoc = {}) {
+  return isAdminUserRecord(userDoc) ? 'admin' : 'user';
+}
+
 function resolveUserTokenLimit(userDoc = {}, role = 'user', planId = getDefaultPlanId()) {
   const effectivePlanId = role === 'admin' ? 'god_mode' : planId;
   const planDef = getPlanDefinition(effectivePlanId);
@@ -4810,6 +5032,112 @@ function resolveUserTokenLimit(userDoc = {}, role = 'user', planId = getDefaultP
   );
 
   return knownPlanLimits.has(storedTokenLimit) ? planTokenLimit : storedTokenLimit;
+}
+
+function getDisplayPlanId(role = 'user', userDoc = {}) {
+  if (role === 'admin' || isAdminUserRecord(userDoc)) return 'god_mode';
+  return getStoredPlanId(userDoc);
+}
+
+function updatePricingModalState(activePlanId = 'free', role = 'user') {
+  document.querySelectorAll('[data-plan-card]').forEach(card => {
+    const planId = card.dataset.planCard;
+    const isCurrent = role !== 'admin' && planId === activePlanId;
+    card.classList.toggle('current', isCurrent);
+    const btn = card.querySelector('.pricing-select-btn');
+    if (!btn) return;
+    if (planId === 'free') {
+      btn.disabled = role !== 'admin';
+      btn.textContent = isCurrent ? 'Current Plan' : 'Free Plan';
+      return;
+    }
+    btn.disabled = role === 'admin';
+    btn.textContent = isCurrent ? 'Current Plan' : `Choose ${getPlanDefinition(planId).label || planId}`;
+  });
+}
+
+function updateSubscriptionButton(profile = {}) {
+  const btn = document.getElementById('usage-upgrade-btn');
+  const limitBtn = document.getElementById('upgrade-pro-btn');
+  if (!btn || !limitBtn) return;
+
+  const role = profile.role || 'user';
+  const planId = profile.planId || getDefaultPlanId();
+  const isAdmin = role === 'admin';
+  const isPaid = !isAdmin && planId !== 'free';
+
+  btn.hidden = isAdmin;
+  if (isAdmin) {
+    limitBtn.textContent = 'Admin Dashboard';
+    return;
+  }
+
+  btn.textContent = isPaid ? 'Manage Subscription' : 'Upgrade to Pro';
+  limitBtn.textContent = isPaid ? 'Manage Subscription' : 'Upgrade to Pro';
+}
+
+async function redirectToStripe(endpoint, payload, pendingText) {
+  try {
+    showToast(pendingText, 1800);
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data?.url) {
+      throw new Error(data?.error?.message || 'Subscription request failed');
+    }
+    window.location.href = data.url;
+  } catch (err) {
+    showToast(err?.message || 'Subscription request failed');
+  }
+}
+
+async function openStripeCustomerPortal() {
+  if (!currentUser) {
+    showToast('Sign in to manage your subscription');
+    return;
+  }
+  await redirectToStripe('/api/create-customer-portal-session', {
+    uid: currentUser.uid,
+    email: currentUser.email || '',
+  }, 'Opening customer portal...');
+}
+
+async function startCheckoutForPlan(planId) {
+  if (!currentUser) {
+    showToast('Sign in to upgrade your plan');
+    return;
+  }
+  if (!['starter', 'pro', 'ultra'].includes(planId)) {
+    showToast('Choose a paid plan to continue');
+    return;
+  }
+  await redirectToStripe('/api/create-checkout-session', {
+    uid: currentUser.uid,
+    email: currentUser.email || '',
+    priceId: planId,
+    planId,
+  }, `Starting ${getPlanDefinition(planId).label || planId} checkout...`);
+}
+
+function openPricingModal() {
+  const role = state.usageProfile?.role || 'user';
+  const planId = state.usageProfile?.planId || getDefaultPlanId();
+  updatePricingModalState(planId, role);
+  openModal('pricing-modal');
+}
+
+function handleSubscriptionAction() {
+  const role = state.usageProfile?.role || 'user';
+  const planId = state.usageProfile?.planId || getDefaultPlanId();
+  if (role === 'admin') return;
+  if (planId === 'free') {
+    openPricingModal();
+    return;
+  }
+  openStripeCustomerPortal();
 }
 
 async function loadPlanConfig() {
@@ -4880,12 +5208,12 @@ async function initFirebase() {
           const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
           const userSnap = firebaseServices.getDoc ? await firebaseServices.getDoc(userRef) : null;
           const userDoc = userSnap && userSnap.exists() ? (userSnap.data() || {}) : {};
-          if (userDoc.role === 'admin' || currentUser.email === getAdminEmail()) {
+          if (isAdminUserRecord(userDoc)) {
             window.isGodMode = true;
             showToast('God Mode Active: Welcome Socceracctiktok');
           }
-          const role = userDoc.role || (currentUser.email === getAdminEmail() ? 'admin' : 'user');
-          const planId = getStoredPlanId(userDoc);
+          const role = getUsageRole(userDoc);
+          const planId = getDisplayPlanId(role, userDoc);
           const tokenLimit = resolveUserTokenLimit(userDoc, role, planId);
 
           await firebaseServices.setDoc(
@@ -7681,6 +8009,8 @@ async function renderUsageStats() {
     usageBarEl.hidden = !defaultPlan.showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = firebaseServices.enabled ? 'Sign in to view usage.' : 'Google sign-in required.';
+    updateSubscriptionButton(state.usageProfile);
+    updatePricingModalState(state.usageProfile.planId, state.usageProfile.role);
     return;
   }
 
@@ -7688,9 +8018,9 @@ async function renderUsageStats() {
     const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
     const userSnap = await firebaseServices.getDoc(userRef);
     const userDoc = userSnap.exists() ? (userSnap.data() || {}) : {};
-    const role = userDoc.role === 'admin' || currentUser.email === getAdminEmail() ? 'admin' : 'user';
-    const planId = getStoredPlanId(userDoc);
-    const planDef = getPlanDefinition(role === 'admin' ? 'god_mode' : planId);
+    const role = getUsageRole(userDoc);
+    const planId = getDisplayPlanId(role, userDoc);
+    const planDef = getPlanDefinition(planId);
     const tokenLimit = resolveUserTokenLimit(userDoc, role, planId);
     const tokensUsed = Number(userDoc.tokensUsed || 0);
     state.usageProfile = {
@@ -7704,6 +8034,8 @@ async function renderUsageStats() {
       planNameEl.textContent = planDef.label || 'God Mode';
       usageBarEl.hidden = true;
       usageMetaEl.textContent = 'Unlimited admin usage.';
+      updateSubscriptionButton(state.usageProfile);
+      updatePricingModalState(planId, role);
       return;
     }
 
@@ -7712,10 +8044,13 @@ async function renderUsageStats() {
     usageBarEl.hidden = !planDef.showProgressBar;
     usageFillEl.style.width = `${pct}%`;
     usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} tokens used`;
+    updateSubscriptionButton(state.usageProfile);
+    updatePricingModalState(planId, role);
   } catch (err) {
     usageBarEl.hidden = !getPlanDefinition(getDefaultPlanId()).showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = 'Unable to load usage right now.';
+    updateSubscriptionButton(state.usageProfile);
   }
 }
 
@@ -8272,16 +8607,22 @@ function initEventListeners() {
   document.getElementById('topbar-settings-btn').addEventListener('click', openSettings);
   document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
   document.getElementById('signout-btn').addEventListener('click', signOutUser);
-  document.getElementById('usage-upgrade-btn').addEventListener('click', () => {
-    openModal('usage-limit-modal');
-  });
+  document.getElementById('usage-upgrade-btn').addEventListener('click', handleSubscriptionAction);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('settings-cancel').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('settings-close').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('usage-limit-close').addEventListener('click', () => closeModal('usage-limit-modal'));
   document.getElementById('upgrade-pro-btn').addEventListener('click', () => {
     closeModal('usage-limit-modal');
-    showToast('Upgrade to Pro placeholder');
+    handleSubscriptionAction();
+  });
+  document.getElementById('pricing-close').addEventListener('click', () => closeModal('pricing-modal'));
+  document.querySelectorAll('.pricing-select-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const planId = btn.dataset.planId;
+      if (planId === 'free') return;
+      await startCheckoutForPlan(planId);
+    });
   });
   // Sliders
   document.getElementById('temp-slider').addEventListener('input', (e) => {

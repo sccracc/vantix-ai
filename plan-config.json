@@ -29,7 +29,7 @@
     "god_mode": {
       "label": "God Mode",
       "priceUsd": 0,
-      "tokenLimit": 100000000000,
+      "tokenLimit": 999999999,
       "showProgressBar": false
     }
   }

@@ -9,11 +9,31 @@ const DEFAULT_PLAN_CONFIG = {
   plans: {
     free: {
       label: 'Free',
-      tokenLimit: 100000,
+      priceUsd: 0,
+      tokenLimit: 10000,
+      showProgressBar: true,
+    },
+    starter: {
+      label: 'Starter',
+      priceUsd: 10,
+      tokenLimit: 1000000,
+      showProgressBar: true,
+    },
+    pro: {
+      label: 'Pro',
+      priceUsd: 20,
+      tokenLimit: 5000000,
+      showProgressBar: true,
+    },
+    ultra: {
+      label: 'Ultra',
+      priceUsd: 50,
+      tokenLimit: 25000000,
       showProgressBar: true,
     },
     god_mode: {
       label: 'God Mode',
+      priceUsd: 0,
       tokenLimit: 999999999,
       showProgressBar: false,
     },
