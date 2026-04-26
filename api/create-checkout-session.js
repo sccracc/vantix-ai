@@ -19,7 +19,7 @@ export default async function handler(req) {
     const fallbackEmail = String(body?.email || '').trim();
     if (!uid) return jsonResponse({ error: { message: 'Missing uid' } }, 400);
 
-    const stripePriceId = resolveStripePriceId(requestedPrice);
+    const stripePriceId = await resolveStripePriceId(requestedPrice);
     const { projectId, accessToken } = await getFirestoreAccess();
     const userDoc = await getFirestoreUserDoc(uid, accessToken, projectId);
     const customerId = await getOrCreateStripeCustomer({
@@ -80,7 +80,7 @@ function getStripeSecretKey() {
   return key;
 }
 
-function resolveStripePriceId(input) {
+async function resolveStripePriceId(input) {
   const priceMap = {
     starter: process.env.STRIPE_STARTER_PRICE_ID,
     pro: process.env.STRIPE_PRO_PRICE_ID,
@@ -88,9 +88,13 @@ function resolveStripePriceId(input) {
   };
   const normalized = String(input || '').trim();
   if (!normalized) throw new Error('Missing priceId');
-  if (priceMap[normalized]) return priceMap[normalized];
+  if (priceMap[normalized]) return await normalizeStripePriceOrProductId(priceMap[normalized]);
   const exactMatch = Object.values(priceMap).find(value => value === normalized);
-  if (exactMatch) return exactMatch;
+  if (exactMatch) return await normalizeStripePriceOrProductId(exactMatch);
+  if (normalized.startsWith('price_')) return normalized;
+  if (normalized.startsWith('prod_')) {
+    return await findActiveRecurringPriceForProduct(normalized);
+  }
   throw new Error('Unsupported subscription tier');
 }
 
@@ -104,6 +108,27 @@ function resolvePlanKey(input) {
   return 'unknown';
 }
 
+async function normalizeStripePriceOrProductId(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) throw new Error('Missing Stripe price ID');
+  if (normalized.startsWith('price_')) return normalized;
+  if (normalized.startsWith('prod_')) {
+    return await findActiveRecurringPriceForProduct(normalized);
+  }
+  return normalized;
+}
+
+async function findActiveRecurringPriceForProduct(productId) {
+  const resp = await stripeRequest(`/prices?product=${encodeURIComponent(productId)}&active=true&type=recurring&limit=100`);
+  const prices = Array.isArray(resp.data) ? resp.data : [];
+  if (!prices.length) {
+    throw new Error(`No active recurring price found for product ${productId}`);
+  }
+
+  const preferred = prices.find(price => price?.recurring?.interval === 'month') || prices[0];
+  return preferred.id;
+}
+
 async function stripeFormRequest(path, formFields) {
   const resp = await fetch(`${STRIPE_API_BASE}${path}`, {
     method: 'POST',
@@ -112,6 +137,22 @@ async function stripeFormRequest(path, formFields) {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams(formFields).toString(),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.error?.message || `Stripe request failed (${resp.status})`);
+  }
+  return data;
+}
+
+async function stripeRequest(path, { method = 'GET', body } = {}) {
+  const resp = await fetch(`${STRIPE_API_BASE}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${getStripeSecretKey()}`,
+      ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    },
+    ...(body ? { body: new URLSearchParams(body).toString() } : {}),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
