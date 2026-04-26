@@ -1,16 +1,7 @@
 import { stream } from '@netlify/functions';
+import https from 'node:https';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
-
-function json(status, payload) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: {
-      'content-type': 'application/json',
-      'cache-control': 'no-store',
-    },
-  });
-}
 
 function normalizeSupabaseUrl(rawUrl) {
   const text = String(rawUrl || '').trim();
@@ -82,6 +73,28 @@ async function validateSupabaseToken(accessToken) {
   } catch (error) {
     return { ok: false, reason: `Supabase auth check failed. ${error?.message || 'Unknown error'}` };
   }
+}
+
+function requestDeepSeekStream(payload, apiKey) {
+  return new Promise((resolve, reject) => {
+    const bodyText = JSON.stringify(payload);
+    const req = https.request(DEEPSEEK_API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(bodyText),
+        'authorization': `Bearer ${apiKey}`,
+        'accept': 'text/event-stream',
+        'accept-encoding': 'identity',
+      },
+    }, (res) => {
+      resolve(res);
+    });
+
+    req.on('error', reject);
+    req.write(bodyText);
+    req.end();
+  });
 }
 
 export const handler = stream(async (event) => {
@@ -198,51 +211,30 @@ export const handler = stream(async (event) => {
       payload.thinking = { type: 'disabled' };
     }
 
-    const upstream = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'authorization': `Bearer ${deepseekApiKey}`,
-        'accept': 'text/event-stream',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!upstream.body) {
-      const text = await upstream.text();
-      return {
-        statusCode: upstream.status,
-        headers: {
-          'content-type': upstream.headers.get('content-type') || 'application/json',
-          'cache-control': 'no-store',
-        },
-        body: text,
-      };
-    }
-
-    const reader = upstream.body.getReader();
+    const upstream = await requestDeepSeekStream(payload, deepseekApiKey);
+    const statusCode = Number(upstream.statusCode || 502);
+    const contentType = upstream.headers['content-type'] || 'text/event-stream; charset=utf-8';
     const body = new ReadableStream({
-      async pull(controller) {
-        try {
-          const { done, value } = await reader.read();
-          if (done) {
-            controller.close();
-            return;
-          }
-          if (value) controller.enqueue(value);
-        } catch (error) {
+      start(controller) {
+        upstream.on('data', (chunk) => {
+          controller.enqueue(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+        });
+        upstream.on('end', () => {
+          controller.close();
+        });
+        upstream.on('error', (error) => {
           controller.error(error);
-        }
+        });
       },
-      cancel(reason) {
-        reader.cancel(reason).catch(() => {});
+      cancel() {
+        upstream.destroy();
       },
     });
 
     return {
-      statusCode: upstream.status,
+      statusCode,
       headers: {
-        'content-type': upstream.headers.get('content-type') || 'text/event-stream; charset=utf-8',
+        'content-type': Array.isArray(contentType) ? contentType[0] : contentType,
         'cache-control': 'no-cache, no-store, must-revalidate, no-transform',
         'pragma': 'no-cache',
         'expires': '0',
