@@ -4273,7 +4273,7 @@ const BRAND_NAME = 'Vantix AI';
 const BRAND_AVATAR = 'VA';
 const BRAND_MODEL_LABEL = 'Vantix AI Core';
 const API_MODEL_ID = [100, 101, 101, 112, 115, 101, 101, 107, 45, 99, 104, 97, 116].map(code => String.fromCharCode(code)).join('');
-const API_URL = '/.netlify/functions/chat';
+const API_URL = '/api/chat';
 
 const SUPABASE_URL = window.SUPABASE_URL || 'https://YOUR_SUPABASE_URL';
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
@@ -4343,7 +4343,7 @@ async function ensureSupabaseClient() {
 }
 
 function maxCompletionTokensForModel() {
-  return 8192;
+  return state.mode === 'fast' ? 1024 : 4096;
 }
 
 function getSelectedModelId() {
@@ -4479,7 +4479,6 @@ async function finalizeAuthFromUrl(client) {
 }
 
 async function initAuth() {
-  window.userSession = null;
   const client = await ensureSupabaseClient();
   if (!client) {
     updateAuthUI();
@@ -4495,15 +4494,35 @@ async function initAuth() {
     }
 
     await finalizeAuthFromUrl(client);
-    const { data: { session } } = await client.auth.getSession();
-    setUserSession(session || null);
-    if (!session && typeof client.auth.refreshSession === 'function') {
-      const refreshed = await client.auth.refreshSession().catch(() => null);
-      setUserSession(refreshed?.data?.session || null);
-    }
+    await syncAuthSession(client);
   } catch (err) {
     console.warn('Supabase auth init error:', err);
   }
+}
+
+async function syncAuthSession(client = null) {
+  const authClient = client || await ensureSupabaseClient();
+  if (!authClient) {
+    setUserSession(null);
+    return null;
+  }
+  try {
+    const { data: { session } } = await authClient.auth.getSession();
+    if (session) {
+      setUserSession(session);
+      return session;
+    }
+    if (typeof authClient.auth.refreshSession === 'function') {
+      const refreshed = await authClient.auth.refreshSession().catch(() => null);
+      const refreshedSession = refreshed?.data?.session || null;
+      setUserSession(refreshedSession);
+      return refreshedSession;
+    }
+  } catch (err) {
+    console.warn('Supabase session sync error:', err);
+  }
+  setUserSession(null);
+  return null;
 }
 
 async function signInWithMagicLink() {
@@ -7917,6 +7936,15 @@ function initEventListeners() {
       showToast('Session stats reset');
     });
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      syncAuthSession();
+    }
+  });
+  window.addEventListener('focus', () => {
+    syncAuthSession();
+  });
 
   const mainArea = document.getElementById('main');
   const dropOverlay = document.getElementById('chat-drop-overlay');
