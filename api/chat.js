@@ -114,8 +114,8 @@ export default async function handler(req) {
     userProfile.email === getAdminEmail(planConfig) ||
     userEmail === getAdminEmail(planConfig);
   const requestedModel = String(payload?.model || '');
-  const remainingUnits = Number(userProfile.tokenLimit || 0) - Number(userProfile.tokensUsed || 0);
-  if (!isAdmin && userProfile.tokensUsed >= userProfile.tokenLimit) {
+  const remainingUnits = getRemainingUsageUnits(userProfile);
+  if (!isAdmin && remainingUnits <= 0) {
     return jsonResponse({ error: { message: 'Usage limit reached' } }, 403);
   }
   if (!isAdmin && requestedModel === 'deepseek-v4-pro' && remainingUnits < 1000) {
@@ -186,7 +186,7 @@ export default async function handler(req) {
       try {
         if (!streamFailed && upstream.ok) {
           const usageDelta = calculateUsageUnitsFromSse(rawSseText, requestedModel);
-          await incrementUserTokensUsed(userUid, usageDelta);
+          await consumeUsageUnits(userUid, usageDelta, userProfile, planConfig);
         }
       } catch (error) {
         console.error('Failed to increment usage:', error);
@@ -249,6 +249,8 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
       planId: defaultPlanId,
       tokensUsed: 0,
       tokenLimit: Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit),
+      creditBalance: 0,
+      topupBalance: 0,
     };
     await upsertUserProfileDefaults(uid, profile, accessToken, projectId);
     return profile;
@@ -272,12 +274,16 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
     planId: String(defaultPlanId),
     tokensUsed: toSafeNumber(fields.tokensUsed, 0),
     tokenLimit: resolveUserTokenLimit(fields, role, defaultPlanId, planConfig),
+    creditBalance: toSafeNumber(fields.creditBalance ?? fields.topupBalance, 0),
+    topupBalance: toSafeNumber(fields.topupBalance ?? fields.creditBalance, 0),
   };
   if (
     !fields.role ||
     !fields.plan ||
     !fields.planId ||
     typeof fields.tokenLimit === 'undefined' ||
+    typeof fields.creditBalance === 'undefined' ||
+    typeof fields.topupBalance === 'undefined' ||
     Number(fields.tokenLimit) !== Number(profile.tokenLimit)
   ) {
     await upsertUserProfileDefaults(uid, profile, accessToken, projectId);
@@ -342,7 +348,7 @@ function resolveUserTokenLimit(fields = {}, role = 'user', planId = getDefaultPl
 
 async function upsertUserProfileDefaults(uid, profile, accessToken, projectId) {
   const baseUrl = `${FIRESTORE_BASE_URL}/projects/${projectId}/databases/(default)/documents/users/${encodeURIComponent(uid)}`;
-  const updateMask = ['email', 'role', 'plan', 'planId', 'tokenLimit', 'tokensUsed'];
+  const updateMask = ['email', 'role', 'plan', 'planId', 'tokenLimit', 'tokensUsed', 'creditBalance', 'topupBalance'];
   const params = new URLSearchParams();
   updateMask.forEach(field => params.append('updateMask.fieldPaths', field));
 
@@ -361,6 +367,8 @@ async function upsertUserProfileDefaults(uid, profile, accessToken, projectId) {
         planId: String(profile.planId || profile.plan || 'free'),
         tokenLimit: Number(profile.tokenLimit || 0),
         tokensUsed: Number(profile.tokensUsed || 0),
+        creditBalance: Number(profile.creditBalance || 0),
+        topupBalance: Number(profile.topupBalance || profile.creditBalance || 0),
       }),
     }),
   });
@@ -371,9 +379,25 @@ async function upsertUserProfileDefaults(uid, profile, accessToken, projectId) {
   }
 }
 
-async function incrementUserTokensUsed(uid, tokenDelta) {
+function getRemainingUsageUnits(profile = {}) {
+  const tokenLimit = Number(profile.tokenLimit || 0);
+  const tokensUsed = Number(profile.tokensUsed || 0);
+  const creditBalance = Number(profile.creditBalance ?? profile.topupBalance ?? 0);
+  return Math.max(0, tokenLimit - tokensUsed + creditBalance);
+}
+
+async function consumeUsageUnits(uid, tokenDelta, fallbackProfile = {}, planConfig = DEFAULT_PLAN_CONFIG) {
+  const delta = Math.max(1, Math.ceil(Number(tokenDelta) || 0));
   const accessToken = await getGoogleAccessToken();
   const projectId = getFirebaseProjectId();
+  const currentProfile = await getUserProfile(uid, fallbackProfile.email || '', planConfig);
+  const tokenLimit = Number(currentProfile.tokenLimit || fallbackProfile.tokenLimit || 0);
+  const tokensUsed = Number(currentProfile.tokensUsed || 0);
+  const creditBalance = Number(currentProfile.creditBalance ?? currentProfile.topupBalance ?? 0);
+  const monthlyRemaining = Math.max(0, tokenLimit - tokensUsed);
+  const monthlySpend = Math.min(monthlyRemaining, delta);
+  const creditSpend = Math.min(creditBalance, Math.max(0, delta - monthlySpend));
+
   const commitUrl = `${FIRESTORE_BASE_URL}/projects/${projectId}/databases/(default)/documents:commit`;
   const documentName = `projects/${projectId}/databases/(default)/documents/users/${uid}`;
   const resp = await fetch(commitUrl, {
@@ -391,7 +415,15 @@ async function incrementUserTokensUsed(uid, tokenDelta) {
             fieldTransforms: [
               {
                 fieldPath: 'tokensUsed',
-                increment: { integerValue: String(tokenDelta) },
+                increment: { integerValue: String(monthlySpend) },
+              },
+              {
+                fieldPath: 'creditBalance',
+                increment: { integerValue: String(-creditSpend) },
+              },
+              {
+                fieldPath: 'topupBalance',
+                increment: { integerValue: String(-creditSpend) },
               },
               {
                 fieldPath: 'lastUsageAt',

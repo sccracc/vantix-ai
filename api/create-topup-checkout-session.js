@@ -3,18 +3,19 @@ export const config = { runtime: 'edge' };
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
 const FIRESTORE_BASE_URL = 'https://firestore.googleapis.com/v1';
 
-const PLAN_LIMITS = {
-  starter: 1000000,
-  pro: 5000000,
-  ultra: 25000000,
-  free: 10000,
-  god_mode: 999999999,
-};
-
 const TOPUP_PACKS = {
-  quick_refill: 50000,
-  power_up: 250000,
-  vault: 1000000,
+  quick_refill: {
+    units: 50000,
+    envKey: 'STRIPE_QUICK_REFILL_PRICE_ID',
+  },
+  power_up: {
+    units: 250000,
+    envKey: 'STRIPE_POWER_UP_PRICE_ID',
+  },
+  vault: {
+    units: 1000000,
+    envKey: 'STRIPE_VAULT_PRICE_ID',
+  },
 };
 
 export default async function handler(req) {
@@ -29,79 +30,45 @@ export default async function handler(req) {
   try {
     const body = await req.json();
     const uid = String(body?.uid || '').trim();
-    const sessionId = String(body?.sessionId || '').trim();
+    const topupId = String(body?.topupId || '').trim();
+    const fallbackEmail = String(body?.email || '').trim();
     if (!uid) return jsonResponse({ error: { message: 'Missing uid' } }, 400);
-    if (!sessionId) return jsonResponse({ error: { message: 'Missing sessionId' } }, 400);
+    if (!TOPUP_PACKS[topupId]) return jsonResponse({ error: { message: 'Unsupported top-up pack' } }, 400);
 
-    const session = await stripeRequest(`/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=subscription&expand[]=customer`);
-    const sessionUid = String(session?.metadata?.firebaseUid || session?.client_reference_id || '');
-    if (sessionUid && sessionUid !== uid) {
-      return jsonResponse({ error: { message: 'Session user mismatch' } }, 403);
-    }
-
-    const customerId = typeof session?.customer === 'object' ? String(session.customer.id || '') : String(session?.customer || '');
-    const customerEmail = String(session?.customer_details?.email || session?.customer_email || '');
-    const accessToken = await getGoogleAccessToken();
-    const projectId = getFirebaseProjectId();
-
-    const topupId = normalizeTopupId(session?.metadata?.topupId || '');
-    if (topupId && TOPUP_PACKS[topupId]) {
-      const userDoc = await getFirestoreUserDoc(uid, accessToken, projectId);
-      const creditBalance = Number(userDoc.creditBalance || 0);
-      const newBalance = creditBalance + TOPUP_PACKS[topupId];
-      await patchFirestoreUser(
-        uid,
-        {
-          creditBalance: newBalance,
-          topupBalance: newBalance,
-          stripeCustomerId: customerId,
-          email: customerEmail,
-          lastTopUpAt: new Date().toISOString(),
-        },
-        accessToken,
-        projectId
-      );
-
-      return jsonResponse({
-        ok: true,
-        topupId,
-        units: TOPUP_PACKS[topupId],
-        creditBalance: newBalance,
-        customerId,
-      }, 200);
-    }
-
-    const sessionPlanId = normalizePlanId(session?.metadata?.planId || session?.subscription?.metadata?.planId || '');
-    const planId = sessionPlanId || 'free';
-    if (!['starter', 'pro', 'ultra'].includes(planId)) {
-      return jsonResponse({ error: { message: 'Checkout session did not map to a paid plan' } }, 400);
-    }
-
-    const subscriptionId = typeof session?.subscription === 'object' ? String(session.subscription.id || '') : String(session?.subscription || '');
-    await patchFirestoreUser(
+    const priceId = await resolveStripePriceId(TOPUP_PACKS[topupId].envKey);
+    const { projectId, accessToken } = await getFirestoreAccess();
+    const userDoc = await getFirestoreUserDoc(uid, accessToken, projectId);
+    const customerId = await getOrCreateStripeCustomer({
       uid,
-      {
-        plan: planId,
-        planId,
-        tokenLimit: PLAN_LIMITS[planId],
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        subscriptionStatus: String(session?.subscription?.status || session?.status || 'active'),
-        email: customerEmail,
-      },
-      accessToken,
-      projectId
-    );
+      email: String(userDoc.email || fallbackEmail || ''),
+      name: String(userDoc.displayName || ''),
+      existingCustomerId: String(userDoc.stripeCustomerId || ''),
+    });
 
-    return jsonResponse({
-      ok: true,
-      planId,
-      tokenLimit: PLAN_LIMITS[planId],
-      subscriptionId,
-      customerId,
-    }, 200);
+    if (!userDoc.stripeCustomerId || userDoc.stripeCustomerId !== customerId) {
+      await patchFirestoreUser(uid, { stripeCustomerId: customerId }, accessToken, projectId);
+    }
+
+    const origin = new URL(req.url).origin;
+    const session = await stripeFormRequest('/checkout/sessions', {
+      mode: 'payment',
+      customer: customerId,
+      success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/?checkout=cancelled`,
+      client_reference_id: uid,
+      'line_items[0][price]': priceId,
+      'line_items[0][quantity]': '1',
+      'metadata[firebaseUid]': uid,
+      'metadata[topupId]': topupId,
+      'metadata[units]': String(TOPUP_PACKS[topupId].units),
+      'payment_intent_data[metadata][firebaseUid]': uid,
+      'payment_intent_data[metadata][topupId]': topupId,
+      'payment_intent_data[metadata][units]': String(TOPUP_PACKS[topupId].units),
+    });
+
+    return jsonResponse({ url: session.url }, 200);
   } catch (error) {
-    return jsonResponse({ error: { message: error?.message || 'Failed to confirm checkout session' } }, 500);
+    return jsonResponse({ error: { message: error?.message || 'Failed to create top-up checkout session' } }, 500);
   }
 }
 
@@ -129,6 +96,40 @@ function getStripeSecretKey() {
   return key;
 }
 
+async function resolveStripePriceId(envKey) {
+  const value = String(process.env[envKey] || '').trim();
+  if (!value) throw new Error(`Missing ${envKey} environment variable`);
+  if (value.startsWith('price_')) return value;
+  if (value.startsWith('prod_')) return await findActiveRecurringPriceForProduct(value);
+  return value;
+}
+
+async function findActiveRecurringPriceForProduct(productId) {
+  const resp = await stripeRequest(`/prices?product=${encodeURIComponent(productId)}&active=true&type=recurring&limit=100`);
+  const prices = Array.isArray(resp.data) ? resp.data : [];
+  if (!prices.length) {
+    throw new Error(`No active recurring price found for product ${productId}`);
+  }
+  const preferred = prices.find(price => price?.recurring?.interval === 'month') || prices[0];
+  return preferred.id;
+}
+
+async function stripeFormRequest(path, formFields) {
+  const resp = await fetch(`${STRIPE_API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getStripeSecretKey()}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams(formFields).toString(),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.error?.message || `Stripe request failed (${resp.status})`);
+  }
+  return data;
+}
+
 async function stripeRequest(path) {
   const resp = await fetch(`${STRIPE_API_BASE}${path}`, {
     headers: {
@@ -142,16 +143,43 @@ async function stripeRequest(path) {
   return data;
 }
 
-function normalizePlanId(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'starter' || normalized === 'pro' || normalized === 'ultra') return normalized;
-  return '';
+async function getOrCreateStripeCustomer({ uid, email, name, existingCustomerId }) {
+  if (existingCustomerId) {
+    try {
+      const existing = await stripeRequest(`/customers/${encodeURIComponent(existingCustomerId)}`);
+      if (existing?.id) return existing.id;
+    } catch {
+      // Customer exists in the other Stripe mode; create a mode-appropriate one.
+    }
+  }
+  const customer = await stripeFormRequest('/customers', {
+    email,
+    name,
+    'metadata[firebaseUid]': uid,
+  });
+  return customer.id;
 }
 
-function normalizeTopupId(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'quick_refill' || normalized === 'power_up' || normalized === 'vault') return normalized;
-  return '';
+async function getFirestoreAccess() {
+  const accessToken = await getGoogleAccessToken();
+  const projectId = getFirebaseProjectId();
+  return { accessToken, projectId };
+}
+
+async function getFirestoreUserDoc(uid, accessToken, projectId) {
+  const resp = await fetch(`${firestoreUserUrl(uid, projectId)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+  if (resp.status === 404) return {};
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(text || `Firestore user lookup failed (${resp.status})`);
+  }
+  const doc = await resp.json();
+  return fromFirestoreFields(doc.fields || {});
 }
 
 async function patchFirestoreUser(uid, patch, accessToken, projectId) {
@@ -170,22 +198,6 @@ async function patchFirestoreUser(uid, patch, accessToken, projectId) {
     const text = await resp.text().catch(() => '');
     throw new Error(text || `Firestore user patch failed (${resp.status})`);
   }
-}
-
-async function getFirestoreUserDoc(uid, accessToken, projectId) {
-  const resp = await fetch(`${firestoreUserUrl(uid, projectId)}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-    },
-  });
-  if (resp.status === 404) return {};
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(text || `Firestore user lookup failed (${resp.status})`);
-  }
-  const doc = await resp.json();
-  return fromFirestoreFields(doc.fields || {});
 }
 
 function firestoreUserUrl(uid, projectId) {
@@ -274,12 +286,6 @@ function base64UrlEncodeBytes(bytes) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
-function toFirestoreFields(fields) {
-  const out = {};
-  for (const [key, value] of Object.entries(fields)) out[key] = toFirestoreValue(value);
-  return out;
-}
-
 function fromFirestoreFields(fields) {
   const out = {};
   for (const [key, value] of Object.entries(fields)) out[key] = fromFirestoreValue(value);
@@ -296,6 +302,12 @@ function fromFirestoreValue(value) {
   if ('mapValue' in value) return fromFirestoreFields(value.mapValue?.fields || {});
   if ('arrayValue' in value) return (value.arrayValue?.values || []).map(fromFirestoreValue);
   return null;
+}
+
+function toFirestoreFields(fields) {
+  const out = {};
+  for (const [key, value] of Object.entries(fields)) out[key] = toFirestoreValue(value);
+  return out;
 }
 
 function toFirestoreValue(value) {

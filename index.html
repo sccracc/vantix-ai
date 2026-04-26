@@ -560,6 +560,8 @@ select:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .usage-plan-label {
@@ -606,6 +608,17 @@ select:focus:not(:focus-visible) {
 .upgrade-btn {
   width: 100%;
   margin-top: 10px;
+}
+
+.usage-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.usage-action-btn {
+  flex: 1 1 0;
+  min-width: 120px;
 }
 
 .pricing-modal {
@@ -700,6 +713,47 @@ select:focus:not(:focus-visible) {
   background: color-mix(in srgb, var(--bg-input) 90%, transparent);
   color: var(--text-secondary);
   font-size: 12.5px;
+}
+
+.topup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.topup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-input) 82%, transparent);
+}
+
+.topup-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.topup-card-price {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.topup-card-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 980px) {
+  .topup-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .pricing-action {
@@ -4028,7 +4082,12 @@ body::before {
           <div class="usage-bar-fill" id="usage-bar-fill"></div>
         </div>
         <div class="usage-meta" id="usage-meta">Sign in to view usage.</div>
+        <div class="usage-meta" id="usage-balance">0 top-up units available</div>
         <div class="usage-note" id="usage-note">Expert Mode uses 10x more Compute Units per message.</div>
+        <div class="usage-actions">
+          <button class="sidebar-btn usage-action-btn" type="button" id="usage-upgrade-btn">Upgrade to Pro</button>
+          <button class="sidebar-btn usage-action-btn" type="button" id="usage-topup-btn">Top Up Credits</button>
+        </div>
       </div>
 
       <button class="btn-new-chat" id="new-chat-btn">
@@ -4443,6 +4502,26 @@ body::before {
         <div class="pricing-action">
           <button class="btn-primary pricing-select-btn" type="button" data-plan-id="ultra">Choose Ultra</button>
         </div>
+      </div>
+    </div>
+    <div class="topup-grid">
+      <div class="topup-card">
+        <div class="topup-card-title">Quick Refill</div>
+        <div class="topup-card-price">$2</div>
+        <div class="topup-card-desc">Adds 50,000 Compute Units to your balance. Units never expire and are used after your monthly plan allowance is exhausted.</div>
+        <button class="btn-primary pricing-select-btn" type="button" data-topup-id="quick_refill">Buy Quick Refill</button>
+      </div>
+      <div class="topup-card">
+        <div class="topup-card-title">Power Up</div>
+        <div class="topup-card-price">$7</div>
+        <div class="topup-card-desc">Adds 250,000 Compute Units. Non-expiring and compatible with all AI models for heavier sessions.</div>
+        <button class="btn-primary pricing-select-btn" type="button" data-topup-id="power_up">Buy Power Up</button>
+      </div>
+      <div class="topup-card">
+        <div class="topup-card-title">The Vault</div>
+        <div class="topup-card-price">$20</div>
+        <div class="topup-card-desc">Adds 1,000,000 Compute Units to your lifetime balance. Ideal for long Expert Mode sessions and deep research.</div>
+        <button class="btn-primary pricing-select-btn" type="button" data-topup-id="vault">Buy The Vault</button>
       </div>
     </div>
     <div class="pricing-disclaimer">The usage panel syncs from the Firestore user record. Admin accounts always stay in God Mode.</div>
@@ -5063,7 +5142,8 @@ function canAccessExpertMode(profile = state.usageProfile || {}) {
 function getRemainingUsageUnits(profile = state.usageProfile || {}) {
   const tokenLimit = Number(profile.tokenLimit || 0);
   const tokensUsed = Number(profile.tokensUsed || 0);
-  return tokenLimit - tokensUsed;
+  const creditBalance = Number(profile.creditBalance || 0);
+  return (tokenLimit - tokensUsed) + creditBalance;
 }
 
 function getExpertModeDisclaimer(profile = state.usageProfile || {}) {
@@ -5179,6 +5259,22 @@ async function startCheckoutForPlan(planId) {
   }, `Starting ${getPlanDefinition(planId).label || planId} checkout...`);
 }
 
+async function startTopUpCheckout(topupId) {
+  if (!currentUser) {
+    showToast('Sign in to buy credits');
+    return;
+  }
+  if (!['quick_refill', 'power_up', 'vault'].includes(topupId)) {
+    showToast('Choose a valid top-up pack');
+    return;
+  }
+  await redirectToStripe('/api/create-topup-checkout-session', {
+    uid: currentUser.uid,
+    email: currentUser.email || '',
+    topupId,
+  }, 'Starting top-up checkout...');
+}
+
 function openPricingModal() {
   const role = state.usageProfile?.role || 'user';
   const planId = state.usageProfile?.planId || getDefaultPlanId();
@@ -5195,6 +5291,10 @@ function handleSubscriptionAction() {
     return;
   }
   openStripeCustomerPortal();
+}
+
+function handleTopUpAction() {
+  openPricingModal();
 }
 
 async function handleCheckoutReturn() {
@@ -5221,7 +5321,11 @@ async function handleCheckoutReturn() {
   cleanUrl.searchParams.delete('checkout');
   cleanUrl.searchParams.delete('session_id');
   window.history.replaceState({}, '', cleanUrl.toString());
-  showToast(`Subscription activated: ${getPlanDefinition(data.planId).label || data.planId}`);
+  if (data?.topupId) {
+    showToast(`Top-up added: ${Number(data.units || 0).toLocaleString()} compute units`);
+  } else {
+    showToast(`Subscription activated: ${getPlanDefinition(data.planId).label || data.planId}`);
+  }
 }
 
 async function loadPlanConfig() {
@@ -8093,6 +8197,7 @@ async function renderUsageStats() {
       planId: getDefaultPlanId(),
       tokensUsed: 0,
       tokenLimit: getDefaultTokenLimit(),
+      creditBalance: 0,
     };
     const defaultPlan = getPlanDefinition(getDefaultPlanId());
     planNameEl.textContent = defaultPlan.label || 'Free';
@@ -8114,11 +8219,13 @@ async function renderUsageStats() {
     const planDef = getPlanDefinition(planId);
     const tokenLimit = resolveUserTokenLimit(userDoc, role, planId);
     const tokensUsed = Number(userDoc.tokensUsed || 0);
+    const creditBalance = Number(userDoc.creditBalance || 0);
     state.usageProfile = {
       role,
       planId,
       tokenLimit,
       tokensUsed,
+      creditBalance,
     };
 
     if (role === 'admin') {
@@ -8136,6 +8243,10 @@ async function renderUsageStats() {
     usageBarEl.hidden = !planDef.showProgressBar;
     usageFillEl.style.width = `${pct}%`;
     usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} compute units used`;
+    const balanceEl = document.getElementById('usage-balance');
+    if (balanceEl) {
+      balanceEl.textContent = `${creditBalance.toLocaleString()} top-up units available`;
+    }
     updateSubscriptionButton(state.usageProfile);
     updatePricingModalState(planId, role);
     updateModeUI();
@@ -8697,6 +8808,7 @@ function initEventListeners() {
   document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
   document.getElementById('signout-btn').addEventListener('click', signOutUser);
   document.getElementById('usage-upgrade-btn').addEventListener('click', handleSubscriptionAction);
+  document.getElementById('usage-topup-btn').addEventListener('click', handleTopUpAction);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('settings-cancel').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('settings-close').addEventListener('click', () => closeModal('settings-modal'));
@@ -8708,6 +8820,11 @@ function initEventListeners() {
   document.getElementById('pricing-close').addEventListener('click', () => closeModal('pricing-modal'));
   document.querySelectorAll('.pricing-select-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
+      const topupId = btn.dataset.topupId;
+      if (topupId) {
+        await startTopUpCheckout(topupId);
+        return;
+      }
       const planId = btn.dataset.planId;
       if (planId === 'free') return;
       await startCheckoutForPlan(planId);
