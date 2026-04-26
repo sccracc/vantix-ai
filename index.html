@@ -4295,6 +4295,9 @@ let supabaseConfig = {
 };
 let supabaseClient = null;
 let authSubscriptionBound = false;
+const SIGN_IN_COOLDOWN_MS = 50000;
+let signInCooldownUntil = 0;
+let signInCooldownTimer = null;
 
 function hasRealSupabaseConfig(config = supabaseConfig) {
   if (!config?.url || !config?.anonKey) return false;
@@ -4392,7 +4395,56 @@ async function callDeepSeekAPI(payload, options = {}) {
 
 function setUserSession(session) {
   window.userSession = session || null;
+  if (window.userSession) {
+    signInCooldownUntil = 0;
+    if (signInCooldownTimer) {
+      clearInterval(signInCooldownTimer);
+      signInCooldownTimer = null;
+    }
+  }
   updateAuthUI();
+}
+
+function getSignInCooldownRemainingMs() {
+  return Math.max(0, signInCooldownUntil - Date.now());
+}
+
+function ensureSignInCooldownTicker() {
+  if (signInCooldownTimer) return;
+  signInCooldownTimer = setInterval(() => {
+    if (getSignInCooldownRemainingMs() <= 0) {
+      clearInterval(signInCooldownTimer);
+      signInCooldownTimer = null;
+    }
+    updateAuthUI();
+  }, 1000);
+}
+
+async function finalizeAuthFromUrl(client) {
+  const searchParams = new URLSearchParams(window.location.search || '');
+  const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+  const code = searchParams.get('code');
+  const tokenHash = searchParams.get('token_hash');
+  const type = searchParams.get('type');
+  const hasTokenFragment = !!hashParams.get('access_token');
+
+  try {
+    if (code && typeof client.auth.exchangeCodeForSession === 'function') {
+      await client.auth.exchangeCodeForSession(code);
+    } else if (tokenHash && type && typeof client.auth.verifyOtp === 'function') {
+      await client.auth.verifyOtp({ token_hash: tokenHash, type });
+    } else if (hasTokenFragment) {
+      // Supabase can auto-detect fragments; keep this branch for URL cleanup below.
+    } else {
+      return;
+    }
+  } catch (err) {
+    console.warn('Supabase callback exchange error:', err);
+  } finally {
+    if (code || tokenHash || type || hasTokenFragment) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
 }
 
 async function initAuth() {
@@ -4404,6 +4456,7 @@ async function initAuth() {
   }
 
   try {
+    await finalizeAuthFromUrl(client);
     const { data: { session } } = await client.auth.getSession();
     setUserSession(session || null);
 
@@ -4419,6 +4472,13 @@ async function initAuth() {
 }
 
 async function signInWithMagicLink() {
+  const remainingMs = getSignInCooldownRemainingMs();
+  if (remainingMs > 0) {
+    const waitSec = Math.ceil(remainingMs / 1000);
+    showToast(`Wait ${waitSec}s before requesting another link`, 2500);
+    updateAuthUI();
+    return;
+  }
   const client = await ensureSupabaseClient();
   if (!client || !isSupabaseConfigured()) {
     showToast('Supabase config missing. Add env vars and redeploy.', 5500);
@@ -4437,6 +4497,9 @@ async function signInWithMagicLink() {
       showToast(`Sign in failed: ${error.message || 'unknown error'}`, 5000);
       return;
     }
+    signInCooldownUntil = Date.now() + SIGN_IN_COOLDOWN_MS;
+    ensureSignInCooldownTicker();
+    updateAuthUI();
     showToast('Magic link sent. Check your inbox.', 5000);
   } catch (err) {
     const message = err?.message || 'Network request failed';
@@ -4470,6 +4533,7 @@ function updateAuthUI() {
   if (email) {
     if (authInfo) authInfo.textContent = `Signed in as ${email}`;
     if (authBtn) {
+      authBtn.disabled = false;
       authBtn.textContent = 'Sign Out';
       authBtn.onclick = signOutUser;
     }
@@ -4478,8 +4542,17 @@ function updateAuthUI() {
   } else {
     if (authInfo) authInfo.textContent = 'Not signed in';
     if (authBtn) {
-      authBtn.textContent = 'Sign In';
-      authBtn.onclick = signInWithMagicLink;
+      const remaining = getSignInCooldownRemainingMs();
+      if (remaining > 0) {
+        const sec = Math.ceil(remaining / 1000);
+        authBtn.textContent = `Sign In (${sec}s)`;
+        authBtn.disabled = true;
+        authBtn.onclick = null;
+      } else {
+        authBtn.textContent = 'Sign In';
+        authBtn.disabled = false;
+        authBtn.onclick = signInWithMagicLink;
+      }
     }
     if (dot) dot.classList.remove('connected');
     if (text) text.textContent = 'Please sign in';
