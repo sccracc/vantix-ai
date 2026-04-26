@@ -85,6 +85,38 @@ async function validateSupabaseToken(accessToken) {
 }
 
 export const handler = stream(async (event) => {
+  if (event.httpMethod === 'GET') {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      start(controller) {
+        let i = 0;
+        controller.enqueue(encoder.encode('stream-start\n'));
+        const timer = setInterval(() => {
+          i += 1;
+          controller.enqueue(encoder.encode(`chunk-${i}\n`));
+          if (i >= 5) {
+            clearInterval(timer);
+            controller.enqueue(encoder.encode('stream-end\n'));
+            controller.close();
+          }
+        }, 1000);
+      },
+    });
+
+    return {
+      statusCode: 200,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'cache-control': 'no-cache, no-store, must-revalidate, no-transform',
+        'pragma': 'no-cache',
+        'expires': '0',
+        'x-accel-buffering': 'no',
+        'connection': 'keep-alive',
+      },
+      body,
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
