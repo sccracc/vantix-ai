@@ -1,3 +1,5 @@
+import { stream } from '@netlify/functions';
+
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
 function json(status, payload) {
@@ -82,35 +84,77 @@ async function validateSupabaseToken(accessToken) {
   }
 }
 
-export default async (request) => {
-  if (request.method !== 'POST') {
-    return json(405, { error: { message: 'Method not allowed.' } });
+export const handler = stream(async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+      body: JSON.stringify({ error: { message: 'Method not allowed.' } }),
+    };
   }
 
-  const authHeader = request.headers.get('authorization') || '';
+  const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
   if (!authHeader.startsWith('Bearer ')) {
-    return json(401, { error: { message: 'Missing bearer token.' } });
+    return {
+      statusCode: 401,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+      body: JSON.stringify({ error: { message: 'Missing bearer token.' } }),
+    };
   }
   const accessToken = authHeader.slice('Bearer '.length).trim();
   if (!accessToken) {
-    return json(401, { error: { message: 'Missing bearer token.' } });
+    return {
+      statusCode: 401,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+      body: JSON.stringify({ error: { message: 'Missing bearer token.' } }),
+    };
   }
 
   const auth = await validateSupabaseToken(accessToken);
   if (!auth.ok) {
-    return json(401, { error: { message: auth.reason } });
+    return {
+      statusCode: 401,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+      body: JSON.stringify({ error: { message: auth.reason } }),
+    };
   }
 
   const deepseekApiKey = process.env.DEEPSEEK_API_KEY || '';
   if (!deepseekApiKey) {
-    return json(500, { error: { message: 'Missing DEEPSEEK_API_KEY.' } });
+    return {
+      statusCode: 500,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+      body: JSON.stringify({ error: { message: 'Missing DEEPSEEK_API_KEY.' } }),
+    };
   }
 
   let payload;
   try {
-    payload = await request.json();
+    payload = JSON.parse(event.body || '{}');
   } catch (_) {
-    return json(400, { error: { message: 'Invalid JSON body.' } });
+    return {
+      statusCode: 400,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+      body: JSON.stringify({ error: { message: 'Invalid JSON body.' } }),
+    };
   }
 
   try {
@@ -123,19 +167,29 @@ export default async (request) => {
       body: JSON.stringify(payload),
     });
 
-    return new Response(upstream.body, {
-      status: upstream.status,
+    return {
+      statusCode: upstream.status,
       headers: {
         'content-type': upstream.headers.get('content-type') || 'application/json',
         'cache-control': 'no-store',
+        'x-accel-buffering': 'no',
+        'connection': 'keep-alive',
       },
-    });
+      body: upstream.body,
+    };
   } catch (error) {
-    return json(502, {
-      error: {
-        message: 'Upstream DeepSeek request failed.',
-        detail: error?.message || 'Unknown error',
+    return {
+      statusCode: 502,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
       },
-    });
+      body: JSON.stringify({
+        error: {
+          message: 'Upstream DeepSeek request failed.',
+          detail: error?.message || 'Unknown error',
+        },
+      }),
+    };
   }
-};
+});
