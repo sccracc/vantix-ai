@@ -3896,8 +3896,8 @@ body::before {
         </div>
 
         <div class="mode-tabs">
-          <button class="mode-tab active" id="mode-expert">Expert</button>
-          <button class="mode-tab" id="mode-fast">Fast</button>
+          <button class="mode-tab" id="mode-expert">Expert</button>
+          <button class="mode-tab active" id="mode-fast">Fast</button>
         </div>
 
         <button class="topbar-btn" id="topbar-settings-btn" title="Settings">
@@ -4640,7 +4640,7 @@ let state = {
     ttsEnabled: false,
   },
   theme: 'midnight',
-  mode: 'expert', // 'expert' | 'fast'
+  mode: 'fast', // 'expert' | 'fast'
   memories: [],
   prompts: [...DEFAULT_PROMPTS],
   gems: [...DEFAULT_GEMS],
@@ -4718,7 +4718,7 @@ function loadState() {
         state.settings.localImageModel = 'mobilenet';
       }
       state.theme = saved.theme || 'midnight';
-      state.mode = saved.mode || 'expert';
+      state.mode = saved.mode || 'fast';
       state.persona = PERSONA_META[saved.persona] ? saved.persona : 'vantix';
       state.memories = saved.memories || [];
       state.imageAnalysisCache = saved.imageAnalysisCache || {};
