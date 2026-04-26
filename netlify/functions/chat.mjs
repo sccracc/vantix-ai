@@ -190,11 +190,20 @@ export const handler = stream(async (event) => {
   }
 
   try {
+    if (payload && payload.stream !== true) payload.stream = true;
+    if (payload && !payload.stream_options) {
+      payload.stream_options = { include_usage: true };
+    }
+    if (payload && payload.model === 'deepseek-chat' && !payload.thinking) {
+      payload.thinking = { type: 'disabled' };
+    }
+
     const upstream = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'authorization': `Bearer ${deepseekApiKey}`,
+        'accept': 'text/event-stream',
       },
       body: JSON.stringify(payload),
     });
