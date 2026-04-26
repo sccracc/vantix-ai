@@ -4075,7 +4075,7 @@ body::before {
           <div class="usage-plan-label">Plan</div>
           <div class="usage-plan-main">
             <div class="usage-plan-name" id="usage-plan-name">Free</div>
-            <button class="sidebar-btn upgrade-btn" type="button" id="usage-upgrade-btn">Upgrade to Pro</button>
+            <button class="sidebar-btn upgrade-btn" type="button" id="usage-plan-btn">Plans & Credits</button>
           </div>
         </div>
         <div class="usage-bar" id="usage-bar">
@@ -4084,10 +4084,6 @@ body::before {
         <div class="usage-meta" id="usage-meta">Sign in to view usage.</div>
         <div class="usage-meta" id="usage-balance">0 top-up units available</div>
         <div class="usage-note" id="usage-note">Expert Mode uses 10x more Compute Units per message.</div>
-        <div class="usage-actions">
-          <button class="sidebar-btn usage-action-btn" type="button" id="usage-upgrade-btn">Upgrade to Pro</button>
-          <button class="sidebar-btn usage-action-btn" type="button" id="usage-topup-btn">Top Up Credits</button>
-        </div>
       </div>
 
       <button class="btn-new-chat" id="new-chat-btn">
@@ -4098,12 +4094,6 @@ body::before {
         <span class="btn-new-chat-plus">+</span>
       </button>
 
-      <div class="sidebar-import-row">
-        <button class="sidebar-btn" id="import-json-btn" title="Import JSON">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20V9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m7.5 12.5 4.5-4.5 4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 4h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-          <span>Import JSON</span>
-        </button>
-      </div>
     </div>
 
     <div class="chat-list" id="chat-list">
@@ -4112,10 +4102,6 @@ body::before {
     </div>
 
     <div class="sidebar-footer">
-      <button class="sidebar-btn" type="button" id="settings-btn" title="Settings (Ctrl+K)" aria-label="Settings">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7Z" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1.2 1.2 0 0 1 0 1.7l-1.2 1.2a1.2 1.2 0 0 1-1.7 0l-.1-.1a1 1 0 0 0-1.1-.2a1 1 0 0 0-.6.9V20a1.2 1.2 0 0 1-1.2 1.2h-1.7A1.2 1.2 0 0 1 11 20v-.2a1 1 0 0 0-.6-.9a1 1 0 0 0-1.1.2l-.1.1a1.2 1.2 0 0 1-1.7 0l-1.2-1.2a1.2 1.2 0 0 1 0-1.7l.1-.1a1 1 0 0 0 .2-1.1a1 1 0 0 0-.9-.6H4a1.2 1.2 0 0 1-1.2-1.2v-1.7A1.2 1.2 0 0 1 4 10h.2a1 1 0 0 0 .9-.6a1 1 0 0 0-.2-1.1l-.1-.1a1.2 1.2 0 0 1 0-1.7l1.2-1.2a1.2 1.2 0 0 1 1.7 0l.1.1a1 1 0 0 0 1.1.2a1 1 0 0 0 .6-.9V4A1.2 1.2 0 0 1 11 2.8h1.7A1.2 1.2 0 0 1 14 4v.2a1 1 0 0 0 .6.9a1 1 0 0 0 1.1-.2l.1-.1a1.2 1.2 0 0 1 1.7 0l1.2 1.2a1.2 1.2 0 0 1 0 1.7l-.1.1a1 1 0 0 0-.2 1.1a1 1 0 0 0 .9.6h.2a1.2 1.2 0 0 1 1.2 1.2v1.7A1.2 1.2 0 0 1 20 14h-.2a1 1 0 0 0-.9.6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-        <span>Settings</span>
-      </button>
       <button class="sidebar-btn" id="memory-btn" title="Memory">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8.5 6.5A3.5 3.5 0 0 1 12 3a3.5 3.5 0 0 1 3.5 3.5v1.1a2.4 2.4 0 0 0 .7 1.7l1 .9c1.1 1 1.8 2.4 1.8 3.9V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-4.9c0-1.5.6-2.9 1.8-3.9l1-.9a2.4 2.4 0 0 0 .7-1.7V6.5Z" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 14.5c.8.7 1.7 1 2.5 1s1.7-.3 2.5-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <span>Memory</span>
@@ -4128,17 +4114,9 @@ body::before {
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 4 10l3.6 10h8.8L20 10l-8-7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.2 10h7.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <span>Gems</span>
       </button>
-      <button class="sidebar-btn" id="theme-btn" title="Themes">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.2A8.8 8.8 0 1 0 20.8 12c0 .9-.7 1.6-1.6 1.6h-1.5a2.4 2.4 0 0 0-2.4 2.4c0 .8.3 1.5.8 2.1c.4.4.6.9.6 1.4c0 .9-.7 1.5-1.6 1.5A8.8 8.8 0 0 1 12 3.2Z" stroke="currentColor" stroke-width="1.6"/><circle cx="7.7" cy="11" r="1.1" fill="currentColor"/><circle cx="10.2" cy="7.4" r="1.1" fill="currentColor"/><circle cx="14.5" cy="7.1" r="1.1" fill="currentColor"/><circle cx="16.9" cy="10.7" r="1.1" fill="currentColor"/></svg>
-        <span>Themes</span>
-      </button>
       <button class="sidebar-btn" id="export-btn" title="Export Chat">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m7.5 11.5 4.5 4.5 4.5-4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 20h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         <span>Export</span>
-      </button>
-      <button class="sidebar-btn" id="export-json-btn" title="Export JSON">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 8.5 4.5 12 8 15.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 8.5 19.5 12 16 15.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="m13.5 5-3 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-        <span>Export JSON</span>
       </button>
     </div>
   </div>
@@ -4172,11 +4150,6 @@ body::before {
           <span class="gem-trigger-name" id="active-gem-name">Base Model</span>
           <span class="gem-trigger-sub" id="active-gem-sub">No extra behavior</span>
         </button>
-
-        <div class="brand-badge" aria-label="Active assistant">
-          <img src="Vantix-Logo.png" alt="">
-          <span>Vantix AI</span>
-        </div>
 
         <div class="mode-tabs">
           <div class="mode-tab-row">
@@ -4312,10 +4285,8 @@ body::before {
           </button>
         </div>
     </div>
-      <div class="composer-footnote">Enter sends. Shift+Enter adds a new line. Voice, files, prompts, Gems, code runner, memory, themes, and exports stay intact.</div>
-      <div class="session-usage" id="session-usage">Tokens used this session: 0, Est. cost: $0.0000</div>
+      <div class="composer-footnote">Enter sends. Shift+Enter adds a new line. Voice, files, prompts, Gems, code runner, memory, and exports stay intact.</div>
       <input type="file" id="file-input" multiple accept=".txt,.md,.js,.ts,.py,.json,.css,.html,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp" style="display:none">
-      <input type="file" id="import-json-input" accept="application/json,.json" style="display:none">
     </div>
   </div>
 </div>
@@ -4334,60 +4305,17 @@ body::before {
     </div>
 
     <div class="form-section">
-      <label class="form-label">Backend</label>
-      <div class="form-static-value">
-        <img src="Vantix-Logo.png" alt="">
-        <span>Secure Vercel API proxy</span>
-      </div>
-      <p class="form-note">Vantix AI credentials are handled on the backend. This client no longer asks users for their own provider API key.</p>
-    </div>
-
-    <div class="form-section">
-      <label class="form-label">Assistant</label>
-      <div class="form-static-value">
-        <img src="Vantix-Logo.png" alt="">
-        <span>Vantix AI</span>
-      </div>
-      <p class="form-note">The interface is locked to a single Vantix AI identity.</p>
-    </div>
-
-    <div class="form-section">
       <label class="form-label">System Prompt</label>
       <textarea class="form-input" id="system-prompt-input" rows="3" placeholder="You are a helpful AI assistant..."></textarea>
     </div>
 
     <div class="form-section">
-      <label class="form-label">Image Attachments</label>
-      <div class="form-static-value">
-        <img src="Vantix-Logo.png" alt="">
-        <span>Manual image descriptions</span>
-      </div>
-      <p class="form-note" id="local-image-model-hint">Add your own image description. The app sends your text summary instead of the raw image binary.</p>
-    </div>
-
-    <div class="form-section">
-      <label class="form-label">Voice Output</label>
+      <label class="form-label">Recommended Responses</label>
       <label class="settings-checkbox-row">
-        <input type="checkbox" id="tts-enabled-input">
-        <span>Enable voice output</span>
+        <input type="checkbox" id="recommended-responses-input">
+        <span>Show suggested follow-up questions after replies</span>
       </label>
-      <p class="form-note">Uses your browser's built-in text-to-speech voices for assistant replies.</p>
-    </div>
-
-    <div class="form-section">
-      <label class="form-label">Temperature: <span id="temp-val">0.7</span></label>
-      <div class="slider-container">
-        <input type="range" class="range-slider" id="temp-slider" min="0" max="2" step="0.1" value="0.7">
-        <span class="slider-value" id="temp-display">0.7</span>
-      </div>
-      <p class="form-hint">Each reply requests the largest completion budget configured for Vantix AI, so answers are not shortened by an app-side token slider.</p>
-    </div>
-
-    <div class="form-section">
-      <label class="form-label">Session Usage</label>
-      <div class="session-usage" id="settings-session-usage" style="margin: 0; padding: 0;">Tokens used this session: 0, Est. cost: $0.0000</div>
-      <canvas class="settings-sparkline" id="session-stats-sparkline" height="80"></canvas>
-      <button type="button" class="settings-mini-btn" id="reset-session-stats-btn">Reset Stats</button>
+      <p class="form-note">When enabled, Vantix generates suggested follow-up questions after every assistant response. This uses credits after every chat.</p>
     </div>
 
     <div class="modal-footer">
@@ -4431,9 +4359,9 @@ body::before {
       <div class="modal-title">Monthly Limit Reached</div>
       <button class="modal-close" id="usage-limit-close">✕</button>
     </div>
-    <p class="form-hint">Your current plan has reached its monthly token limit. Upgrade to continue chatting.</p>
+    <p class="form-hint">Your current plan has reached its monthly token limit. Open plans or manage your subscription to continue.</p>
     <div class="modal-footer">
-      <button class="btn-primary upgrade-btn" id="upgrade-pro-btn" type="button">Upgrade to Pro</button>
+      <button class="btn-primary upgrade-btn" id="usage-limit-action-btn" type="button">Plans & Credits</button>
     </div>
   </div>
 </div>
@@ -4444,7 +4372,7 @@ body::before {
       <div class="modal-title">Choose Your Plan</div>
       <button class="modal-close" id="pricing-close">✕</button>
     </div>
-    <p class="pricing-intro">Select the plan that matches your usage. Paid plans launch Stripe Checkout. Existing subscribers can manage billing from the sidebar.</p>
+    <p class="pricing-intro">Select the plan that matches your usage. Paid plans launch Stripe Checkout, and top-ups add extra credits for any account.</p>
     <div class="pricing-grid">
       <div class="pricing-card" data-plan-card="free">
         <div class="pricing-tier">
@@ -4524,7 +4452,47 @@ body::before {
         <button class="btn-primary pricing-select-btn" type="button" data-topup-id="vault">Buy The Vault</button>
       </div>
     </div>
-    <div class="pricing-disclaimer">The usage panel syncs from the Firestore user record. Admin accounts always stay in God Mode.</div>
+<div class="pricing-disclaimer">The usage panel syncs from the Firestore user record. Admin accounts always stay in God Mode.</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manage-subscription-modal">
+  <div class="modal pricing-modal">
+    <div class="modal-header">
+      <div class="modal-title">Manage Subscription</div>
+      <button class="modal-close" id="manage-subscription-close">x</button>
+    </div>
+    <div class="form-section">
+      <label class="form-label">Current Plan</label>
+      <div class="form-static-value">
+        <img src="Vantix-Logo.png" alt="">
+        <span id="manage-subscription-plan">Free</span>
+      </div>
+      <p class="form-note" id="manage-subscription-summary">Your active plan details will appear here.</p>
+    </div>
+    <div class="modal-footer" style="margin-bottom: 18px;">
+      <button class="btn-primary" id="manage-plan-btn" type="button">Manage Plan</button>
+    </div>
+    <div class="topup-grid">
+      <div class="topup-card">
+        <div class="topup-card-title">Quick Refill</div>
+        <div class="topup-card-price">$2</div>
+        <div class="topup-card-desc">Adds 50,000 Compute Units to your balance. Units never expire and are used after your monthly plan allowance is exhausted.</div>
+        <button class="btn-primary pricing-select-btn" type="button" data-topup-id="quick_refill">Buy Quick Refill</button>
+      </div>
+      <div class="topup-card">
+        <div class="topup-card-title">Power Up</div>
+        <div class="topup-card-price">$7</div>
+        <div class="topup-card-desc">Adds 250,000 Compute Units. Non-expiring and compatible with all AI models for heavier sessions.</div>
+        <button class="btn-primary pricing-select-btn" type="button" data-topup-id="power_up">Buy Power Up</button>
+      </div>
+      <div class="topup-card">
+        <div class="topup-card-title">The Vault</div>
+        <div class="topup-card-price">$20</div>
+        <div class="topup-card-desc">Adds 1,000,000 Compute Units to your lifetime balance. Ideal for long Expert Mode sessions and deep research.</div>
+        <button class="btn-primary pricing-select-btn" type="button" data-topup-id="vault">Buy The Vault</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -4771,11 +4739,12 @@ let state = {
   settings: {
     systemPrompt: 'You are Vantix AI, a helpful, intelligent, and capable AI assistant.',
     temperature: 0.7,
-    localImageModel: 'none',
-    ttsEnabled: false,
+    localImageModel: 'coco-ssd',
+    ttsEnabled: true,
+    recommendedResponses: true,
   },
   theme: 'midnight',
-  mode: 'fast', // 'expert' | 'fast'
+  mode: 'expert', // 'expert' | 'fast'
   memories: [],
   prompts: [...DEFAULT_PROMPTS],
   gems: [...DEFAULT_GEMS],
@@ -4848,10 +4817,15 @@ let composerHistoryState = {
   activeIndex: 0,
 };
 const LOCAL_IMAGE_MODELS = {
-  none: {
-    label: 'Manual',
-    shortLabel: 'Manual',
-    description: 'Use manual descriptions only for image attachments.',
+  mobilenet: {
+    label: 'Standard Vision',
+    shortLabel: 'Standard',
+    description: 'Balanced image classification for quick local descriptions.',
+  },
+  'coco-ssd': {
+    label: 'Advanced Vision',
+    shortLabel: 'Advanced',
+    description: 'More detailed local object detection for image attachments.',
   },
 };
 const IMAGE_ANALYSIS_CACHE_LIMIT = 80;
@@ -4905,10 +4879,13 @@ function loadState() {
       delete state.settings.maxTokens;
       delete state.settings.apiKey;
       if (!LOCAL_IMAGE_MODELS[state.settings.localImageModel]) {
-        state.settings.localImageModel = 'none';
+        state.settings.localImageModel = 'coco-ssd';
       }
-      state.theme = saved.theme || 'midnight';
-      state.mode = saved.mode || 'fast';
+      state.settings.ttsEnabled = true;
+      state.settings.temperature = 0.7;
+      state.settings.recommendedResponses = saved?.settings?.recommendedResponses !== false;
+      state.theme = 'midnight';
+      state.mode = saved.mode || 'expert';
       state.persona = PERSONA_META[saved.persona] ? saved.persona : 'vantix';
       state.memories = saved.memories || [];
       state.imageAnalysisCache = saved.imageAnalysisCache || {};
@@ -5194,8 +5171,8 @@ function updatePricingModalState(activePlanId = 'free', role = 'user') {
 }
 
 function updateSubscriptionButton(profile = {}) {
-  const btn = document.getElementById('usage-upgrade-btn');
-  const limitBtn = document.getElementById('upgrade-pro-btn');
+  const btn = document.getElementById('usage-plan-btn');
+  const limitBtn = document.getElementById('usage-limit-action-btn');
   if (!btn || !limitBtn) return;
 
   const role = profile.role || 'user';
@@ -5209,8 +5186,8 @@ function updateSubscriptionButton(profile = {}) {
     return;
   }
 
-  btn.textContent = isPaid ? 'Manage Subscription' : 'Upgrade to Pro';
-  limitBtn.textContent = isPaid ? 'Manage Subscription' : 'Upgrade to Pro';
+  btn.textContent = isPaid ? 'Manage Subscription' : 'Plans & Credits';
+  limitBtn.textContent = isPaid ? 'Manage Subscription' : 'Plans & Credits';
 }
 
 async function redirectToStripe(endpoint, payload, pendingText) {
@@ -5282,6 +5259,23 @@ function openPricingModal() {
   openModal('pricing-modal');
 }
 
+function openManageSubscriptionModal() {
+  const profile = state.usageProfile || {};
+  const planId = profile.planId || getDefaultPlanId();
+  const planDef = getPlanDefinition(planId);
+  const tokenLimit = Number(profile.tokenLimit || planDef.tokenLimit || 0);
+  const creditBalance = Number(profile.creditBalance || 0);
+  const planEl = document.getElementById('manage-subscription-plan');
+  const summaryEl = document.getElementById('manage-subscription-summary');
+  if (planEl) {
+    planEl.textContent = `${planDef.label || planId}${planId === 'free' ? '' : ' Plan'}`;
+  }
+  if (summaryEl) {
+    summaryEl.textContent = `${tokenLimit.toLocaleString()} monthly compute units. ${creditBalance.toLocaleString()} top-up units available.`;
+  }
+  openModal('manage-subscription-modal');
+}
+
 function handleSubscriptionAction() {
   const role = state.usageProfile?.role || 'user';
   const planId = state.usageProfile?.planId || getDefaultPlanId();
@@ -5290,11 +5284,7 @@ function handleSubscriptionAction() {
     openPricingModal();
     return;
   }
-  openStripeCustomerPortal();
-}
-
-function handleTopUpAction() {
-  openPricingModal();
+  openManageSubscriptionModal();
 }
 
 async function handleCheckoutReturn() {
@@ -5949,11 +5939,11 @@ function syncPersonaUI() {
 // NEW: LOCAL TENSORFLOW IMAGE ANALYSIS
 // ============================================================
 function getLocalImageModelId() {
-  return LOCAL_IMAGE_MODELS[state.settings.localImageModel] ? state.settings.localImageModel : 'mobilenet';
+  return LOCAL_IMAGE_MODELS[state.settings.localImageModel] ? state.settings.localImageModel : 'coco-ssd';
 }
 
 function getLocalImageModelMeta(modelId = getLocalImageModelId()) {
-  return LOCAL_IMAGE_MODELS[modelId] || LOCAL_IMAGE_MODELS.mobilenet;
+  return LOCAL_IMAGE_MODELS[modelId] || LOCAL_IMAGE_MODELS['coco-ssd'];
 }
 
 function getLocalImageModelHint(modelId = getLocalImageModelId()) {
@@ -7246,15 +7236,7 @@ async function streamResponse(conv, typingEl) {
     stream_options: { include_usage: true },
   };
 
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${state.settings.apiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal: currentController.signal,
-  });
+  const response = await postChatRequest(body, currentController.signal);
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({ error: { message: `HTTP ${response.status}` } }));
@@ -7441,7 +7423,7 @@ async function streamResponse(conv, typingEl) {
   renderChatList();
 
   // Generate follow-up questions — delayed so main thread can breathe
-  if (state.settings.apiKey && accumulatedContent.length > 50) {
+  if (state.settings.recommendedResponses !== false && currentUser && accumulatedContent.length > 50) {
     setTimeout(() => generateFollowups(conv, msgWrapper, assistantMsg), 1200);
   }
 }
@@ -7462,11 +7444,14 @@ async function generateFollowups(conv, msgWrapper, assistantMsg) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${state.settings.apiKey}`,
+        ...(currentUser?.uid ? { 'X-Vantix-Uid': currentUser.uid } : {}),
+        ...(currentUser?.email ? { 'X-Vantix-Email': currentUser.email } : {}),
       },
       body: JSON.stringify({
         model: getApiModelId(),
         stream: false,
+        userUid: currentUser?.uid || '',
+        userEmail: currentUser?.email || '',
         messages: [
           {
             role: 'user',
@@ -8122,6 +8107,27 @@ function saveSettings() {
   showToast('Settings saved!');
 }
 
+function openSettings() {
+  document.getElementById('system-prompt-input').value = state.settings.systemPrompt;
+  document.getElementById('recommended-responses-input').checked = state.settings.recommendedResponses !== false;
+  openModal('settings-modal');
+}
+
+function saveSettings() {
+  state.settings.systemPrompt = document.getElementById('system-prompt-input').value;
+  state.settings.localImageModel = 'coco-ssd';
+  state.settings.ttsEnabled = true;
+  state.settings.temperature = 0.7;
+  state.settings.recommendedResponses = document.getElementById('recommended-responses-input').checked;
+  imageAnalysisRuntime.model = null;
+  imageAnalysisRuntime.modelId = '';
+  refreshAttachedImageAnalyses(true);
+  saveState();
+  updateApiStatus();
+  closeModal('settings-modal');
+  showToast('Settings saved!');
+}
+
 function updateApiStatus() {
   const dot = document.getElementById('api-status-dot');
   const text = document.getElementById('api-status-text');
@@ -8260,19 +8266,7 @@ async function renderUsageStats() {
 }
 
 function renderSessionUsage() {
-  const footerEl = document.getElementById('session-usage');
-  const settingsEl = document.getElementById('settings-session-usage');
-  const isAdminUser = !!(window.isGodMode || currentUser?.email === getAdminEmail());
-
-  if (!isAdminUser) {
-    if (footerEl) footerEl.textContent = '';
-    if (settingsEl) settingsEl.textContent = '';
-    return;
-  }
-
-  const text = formatSessionUsageText();
-  if (footerEl) footerEl.textContent = text;
-  if (settingsEl) settingsEl.textContent = text;
+  return;
 }
 
 function sanitizeFilename(name, fallback = 'conversation') {
@@ -8769,21 +8763,6 @@ function initEventListeners() {
     handleFiles(e.target.files);
     e.target.value = '';
   });
-  document.getElementById('import-json-btn').addEventListener('click', () => {
-    document.getElementById('import-json-input').click();
-  });
-  document.getElementById('import-json-input').addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const raw = await file.text();
-      importConversationObject(JSON.parse(raw));
-    } catch (err) {
-      showToast('Failed to import conversation JSON');
-    } finally {
-      e.target.value = '';
-    }
-  });
 
   // Mic
   document.getElementById('mic-btn').addEventListener('click', toggleRecording);
@@ -8803,21 +8782,21 @@ function initEventListeners() {
   });
 
   // Settings
-  document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('topbar-settings-btn').addEventListener('click', openSettings);
   document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
   document.getElementById('signout-btn').addEventListener('click', signOutUser);
-  document.getElementById('usage-upgrade-btn').addEventListener('click', handleSubscriptionAction);
-  document.getElementById('usage-topup-btn').addEventListener('click', handleTopUpAction);
+  document.getElementById('usage-plan-btn').addEventListener('click', handleSubscriptionAction);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('settings-cancel').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('settings-close').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('usage-limit-close').addEventListener('click', () => closeModal('usage-limit-modal'));
-  document.getElementById('upgrade-pro-btn').addEventListener('click', () => {
+  document.getElementById('usage-limit-action-btn').addEventListener('click', () => {
     closeModal('usage-limit-modal');
     handleSubscriptionAction();
   });
   document.getElementById('pricing-close').addEventListener('click', () => closeModal('pricing-modal'));
+  document.getElementById('manage-subscription-close').addEventListener('click', () => closeModal('manage-subscription-modal'));
+  document.getElementById('manage-plan-btn').addEventListener('click', openStripeCustomerPortal);
   document.querySelectorAll('.pricing-select-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const topupId = btn.dataset.topupId;
@@ -8829,19 +8808,6 @@ function initEventListeners() {
       if (planId === 'free') return;
       await startCheckoutForPlan(planId);
     });
-  });
-  // Sliders
-  document.getElementById('temp-slider').addEventListener('input', (e) => {
-    const v = parseFloat(e.target.value).toFixed(1);
-    document.getElementById('temp-display').textContent = v;
-    const tv = document.getElementById('temp-val');
-    if (tv) tv.textContent = v;
-  });
-  // Theme
-  document.getElementById('theme-btn').addEventListener('click', () => openModal('theme-modal'));
-  document.getElementById('theme-close').addEventListener('click', () => closeModal('theme-modal'));
-  document.querySelectorAll('.theme-swatch').forEach(swatch => {
-    swatch.addEventListener('click', () => applyTheme(swatch.dataset.theme));
   });
 
   // Memory
@@ -8871,7 +8837,6 @@ function initEventListeners() {
 
   // Export
   document.getElementById('export-btn').addEventListener('click', exportChat);
-  document.getElementById('export-json-btn').addEventListener('click', exportChatJson);
 
   // Mode tabs
   document.getElementById('mode-expert').addEventListener('click', () => {
@@ -8934,13 +8899,6 @@ function initEventListeners() {
       requestAnimationFrame(updateAutoScrollPill);
     });
   }
-  document.getElementById('reset-session-stats-btn').addEventListener('click', () => {
-    state.sessionStats = [];
-    saveState();
-    drawSessionStatsSparkline();
-    showToast('Session stats reset');
-  });
-
   const mainArea = document.getElementById('main');
   const dropOverlay = document.getElementById('chat-drop-overlay');
   let dragDepth = 0;
