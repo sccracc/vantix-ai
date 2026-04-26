@@ -3,6 +3,17 @@ export const config = { runtime: 'edge' };
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 export default async function handler(req) {
+  if (req.method === 'GET') {
+    return jsonResponse(
+      {
+        ok: true,
+        endpoint: '/api/chat',
+        message: 'Use POST with a JSON body containing a messages array.',
+      },
+      200
+    );
+  }
+
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
