@@ -38,7 +38,7 @@ export default async function handler(req) {
     const session = await stripeFormRequest('/checkout/sessions', {
       mode: 'subscription',
       customer: customerId,
-      success_url: `${origin}/?checkout=success`,
+      success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/?checkout=cancelled`,
       allow_promotion_codes: 'true',
       client_reference_id: uid,

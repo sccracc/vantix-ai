@@ -5197,6 +5197,33 @@ function handleSubscriptionAction() {
   openStripeCustomerPortal();
 }
 
+async function handleCheckoutReturn() {
+  if (!currentUser) return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('checkout') !== 'success') return;
+  const sessionId = params.get('session_id');
+  if (!sessionId) return;
+
+  const resp = await fetch('/api/confirm-checkout-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      uid: currentUser.uid,
+      sessionId,
+    }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.error?.message || 'Failed to confirm checkout');
+  }
+
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('checkout');
+  cleanUrl.searchParams.delete('session_id');
+  window.history.replaceState({}, '', cleanUrl.toString());
+  showToast(`Subscription activated: ${getPlanDefinition(data.planId).label || data.planId}`);
+}
+
 async function loadPlanConfig() {
   try {
     const resp = await fetch('./plan-config.json', { cache: 'no-store' });
@@ -5294,6 +5321,13 @@ async function initFirebase() {
 
         await migrateLegacyLocalConversations();
         subscribeToConversationList();
+
+        try {
+          await handleCheckoutReturn();
+        } catch (err) {
+          console.warn('Failed to confirm checkout return:', err);
+          showToast(err?.message || 'Failed to confirm checkout');
+        }
       } else {
         state.conversations = {};
         state.currentConvId = null;
