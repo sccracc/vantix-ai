@@ -4,12 +4,32 @@
   "plans": {
     "free": {
       "label": "Free",
+      "priceUsd": 0,
       "tokenLimit": 10000,
+      "showProgressBar": true
+    },
+    "starter": {
+      "label": "Starter",
+      "priceUsd": 10,
+      "tokenLimit": 1000000,
+      "showProgressBar": true
+    },
+    "pro": {
+      "label": "Pro",
+      "priceUsd": 20,
+      "tokenLimit": 5000000,
+      "showProgressBar": true
+    },
+    "ultra": {
+      "label": "Ultra",
+      "priceUsd": 50,
+      "tokenLimit": 25000000,
       "showProgressBar": true
     },
     "god_mode": {
       "label": "God Mode",
-      "tokenLimit": 999999999,
+      "priceUsd": 0,
+      "tokenLimit": 100000000000,
       "showProgressBar": false
     }
   }
