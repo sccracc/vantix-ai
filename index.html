@@ -16,7 +16,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ============================================================
    CSS CUSTOM PROPERTIES — THEMING ENGINE
@@ -482,28 +481,6 @@ select:focus:not(:focus-visible) {
   flex-wrap: wrap;
 }
 
-.sidebar-auth {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 0 0;
-  border-top: 1px solid var(--border);
-}
-
-.auth-info {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  min-height: 24px;
-}
-
-.sidebar-auth .sidebar-btn {
-  width: 100%;
-  justify-content: center;
-  font-weight: 700;
-}
-
 .sidebar-btn {
   flex: 1;
   min-width: 36px;
@@ -532,6 +509,34 @@ select:focus:not(:focus-visible) {
   background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--border-accent);
+}
+
+.auth-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.auth-user {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.03);
+}
+
+.auth-user-email {
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.auth-user-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
 }
 
 /* ============================================================
@@ -3798,9 +3803,21 @@ body::before {
 
       <div class="status-row">
         <div class="api-status-dot" id="api-status-dot"></div>
-        <span class="status-text" id="api-status-text">Please sign in</span>
+        <span class="status-text" id="api-status-text">Secure backend ready</span>
         <span class="status-divider"></span>
-        <span class="status-cue">Private browser workspace</span>
+        <span class="status-cue">Vercel + Firebase</span>
+      </div>
+
+      <div class="auth-panel">
+        <button class="sidebar-btn" type="button" id="google-signin-btn">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21.8 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.2c1.9-1.7 3.1-4.4 3.1-7.7Z" fill="currentColor"/><path d="M12 22c2.7 0 5-.9 6.7-2.4l-3.2-2.6c-.9.6-2 .9-3.5.9-2.7 0-4.9-1.8-5.7-4.2H3v2.7A10 10 0 0 0 12 22Z" fill="currentColor" opacity=".85"/><path d="M6.3 13.7A6 6 0 0 1 6 12c0-.6.1-1.2.3-1.7V7.6H3A10 10 0 0 0 2 12c0 1.6.4 3.1 1 4.4l3.3-2.7Z" fill="currentColor" opacity=".65"/><path d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8C17 3.2 14.7 2 12 2A10 10 0 0 0 3 7.6l3.3 2.7C7.1 7.9 9.3 6.1 12 6.1Z" fill="currentColor" opacity=".95"/></svg>
+          <span>Sign In with Google</span>
+        </button>
+        <div class="auth-user" id="auth-user" hidden>
+          <div class="auth-user-label">Signed in as</div>
+          <div class="auth-user-email" id="auth-user-email"></div>
+          <button class="sidebar-btn" type="button" id="signout-btn">Sign Out</button>
+        </div>
       </div>
 
       <button class="btn-new-chat" id="new-chat-btn">
@@ -3854,10 +3871,6 @@ body::before {
         <span>Export JSON</span>
       </button>
     </div>
-    <div class="sidebar-auth" id="sidebar-auth-panel">
-      <div class="auth-info" id="auth-info">Not signed in</div>
-      <button class="sidebar-btn" type="button" id="auth-action-btn">Sign In</button>
-    </div>
   </div>
 
   <!-- MOBILE SIDEBAR OVERLAY -->
@@ -3896,8 +3909,8 @@ body::before {
         </div>
 
         <div class="mode-tabs">
-          <button class="mode-tab" id="mode-expert">Expert</button>
-          <button class="mode-tab active" id="mode-fast">Fast</button>
+          <button class="mode-tab active" id="mode-expert">Expert</button>
+          <button class="mode-tab" id="mode-fast">Fast</button>
         </div>
 
         <button class="topbar-btn" id="topbar-settings-btn" title="Settings">
@@ -4022,6 +4035,10 @@ body::before {
             </div>
           </div>
 
+          <div class="count-cluster">
+            <span class="char-count" id="input-token-count">~0 tokens</span>
+            <span class="char-count" id="char-count">0</span>
+          </div>
           <button id="cancel-btn" aria-label="Cancel">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7 17 17M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
@@ -4031,6 +4048,7 @@ body::before {
         </div>
     </div>
       <div class="composer-footnote">Enter sends. Shift+Enter adds a new line. Voice, files, prompts, Gems, code runner, memory, themes, and exports stay intact.</div>
+      <div class="session-usage" id="session-usage">Tokens used this session: 0, Est. cost: $0.0000</div>
       <input type="file" id="file-input" multiple accept=".txt,.md,.js,.ts,.py,.json,.css,.html,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp" style="display:none">
       <input type="file" id="import-json-input" accept="application/json,.json" style="display:none">
     </div>
@@ -4051,12 +4069,12 @@ body::before {
     </div>
 
     <div class="form-section">
-      <label class="form-label">Authentication</label>
+      <label class="form-label">Backend</label>
       <div class="form-static-value">
-        <img src="Vantix-Logo.png" alt="Vantix AI">
-        <span>Login with Supabase magic link</span>
+        <img src="Vantix-Logo.png" alt="">
+        <span>Secure Vercel API proxy</span>
       </div>
-      <p class="form-note">Use the sidebar Sign In button to request a magic link. No API key is stored in the app.</p>
+      <p class="form-note">DeepSeek credentials are handled on the backend. This client no longer asks users for their own provider API key.</p>
     </div>
 
     <div class="form-section">
@@ -4098,6 +4116,13 @@ body::before {
         <span class="slider-value" id="temp-display">0.7</span>
       </div>
       <p class="form-hint">Each reply requests the largest completion budget configured for Vantix AI, so answers are not shortened by an app-side token slider.</p>
+    </div>
+
+    <div class="form-section">
+      <label class="form-label">Session Usage</label>
+      <div class="session-usage" id="settings-session-usage" style="margin: 0; padding: 0;">Tokens used this session: 0, Est. cost: $0.0000</div>
+      <canvas class="settings-sparkline" id="session-stats-sparkline" height="80"></canvas>
+      <button type="button" class="settings-mini-btn" id="reset-session-stats-btn">Reset Stats</button>
     </div>
 
     <div class="modal-footer">
@@ -4273,344 +4298,29 @@ const BRAND_NAME = 'Vantix AI';
 const BRAND_AVATAR = 'VA';
 const BRAND_MODEL_LABEL = 'Vantix AI Core';
 const API_MODEL_ID = [100, 101, 101, 112, 115, 101, 101, 107, 45, 99, 104, 97, 116].map(code => String.fromCharCode(code)).join('');
-const API_URL = '/.netlify/functions/chat';
-
-const SUPABASE_URL = window.SUPABASE_URL || 'https://YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
-let supabaseConfig = {
-  url: SUPABASE_URL,
-  anonKey: SUPABASE_ANON_KEY,
+const API_URL = '/api/chat';
+const FIREBASE_VERSION = '10.12.5';
+const FIREBASE_CONFIG = window.VANTIX_FIREBASE_CONFIG || {
+  apiKey: "AIzaSyDtzJtUtMKPS84G9-0p1S1hHA_DsNYG-JM",
+  authDomain: "vantix-ai-9859d.firebaseapp.com",
+  projectId: "vantix-ai-9859d",
+  storageBucket: "vantix-ai-9859d.firebasestorage.app",
+  messagingSenderId: "570645716558",
+  appId: "1:570645716558:web:17cf732affbbfcd396ed1f",
+  measurementId: "G-REKYGK32XZ"
 };
-let supabaseClient = null;
-let authSubscriptionBound = false;
-const SIGN_IN_COOLDOWN_MS = 50000;
-let signInCooldownUntil = 0;
-let signInCooldownTimer = null;
 
-function hasRealSupabaseConfig(config = supabaseConfig) {
-  if (!config?.url || !config?.anonKey) return false;
-  if (config.url.includes('YOUR_SUPABASE_URL')) return false;
-  if (config.anonKey.includes('YOUR_SUPABASE_ANON_KEY')) return false;
-  return true;
-}
-
-function normalizeSupabaseUrl(rawUrl) {
-  const text = String(rawUrl || '').trim();
-  if (!text || text.includes('YOUR_SUPABASE_URL')) return '';
-  try {
-    const parsed = new URL(text);
-    return `${parsed.protocol}//${parsed.host}`;
-  } catch (_) {
-    return '';
-  }
-}
-
-function buildSafeAuthRedirectUrl() {
-  return `${window.location.origin}/`;
-}
-
-async function fetchSupabasePublicConfig() {
-  try {
-    const resp = await fetch('/.netlify/functions/public-config', { method: 'GET' });
-    if (!resp.ok) return null;
-    const data = await resp.json().catch(() => null);
-    if (!data?.supabaseUrl || !data?.supabaseAnonKey) return null;
-    return { url: data.supabaseUrl, anonKey: data.supabaseAnonKey };
-  } catch (_) {
-    return null;
-  }
-}
-
-async function ensureSupabaseClient() {
-  if (supabaseClient) return supabaseClient;
-  if (!window.supabase?.createClient) return null;
-  if (!hasRealSupabaseConfig()) {
-    const fetched = await fetchSupabasePublicConfig();
-    if (fetched) supabaseConfig = fetched;
-  }
-  const normalizedUrl = normalizeSupabaseUrl(supabaseConfig.url);
-  if (!normalizedUrl) return null;
-  supabaseConfig.url = normalizedUrl;
-  if (!hasRealSupabaseConfig()) return null;
-  supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-  return supabaseClient;
-}
 
 function maxCompletionTokensForModel() {
-  return state.mode === 'fast' ? 1024 : 4096;
+  return 8192;
 }
 
 function getSelectedModelId() {
-  return state.mode === 'fast' ? 'DeepSeek Chat' : 'DeepSeek V4 Pro';
+  return BRAND_MODEL_LABEL;
 }
 
 function getApiModelId() {
-  return state.mode === 'fast' ? 'deepseek-chat' : 'deepseek-v4-pro';
-}
-
-function userAuthToken() {
-  return window.userSession?.access_token || '';
-}
-
-function isSupabaseConfigured() {
-  return hasRealSupabaseConfig();
-}
-
-function ensureSignedInToken() {
-  const token = userAuthToken();
-  if (!token) {
-    showToast('Sign in required to use Vantix AI', 3000);
-    return '';
-  }
-  return token;
-}
-
-async function getValidAccessToken() {
-  const cached = userAuthToken();
-  if (cached) return cached;
-
-  const client = await ensureSupabaseClient();
-  if (!client) return '';
-
-  try {
-    const { data } = await client.auth.getSession();
-    const liveToken = data?.session?.access_token || '';
-    if (liveToken) {
-      setUserSession(data.session);
-      return liveToken;
-    }
-
-    if (typeof client.auth.refreshSession === 'function') {
-      const refreshed = await client.auth.refreshSession();
-      const refreshedToken = refreshed?.data?.session?.access_token || '';
-      if (refreshedToken) {
-        setUserSession(refreshed.data.session);
-        return refreshedToken;
-      }
-    }
-  } catch (err) {
-    console.warn('Access token refresh failed:', err);
-  }
-
-  return '';
-}
-
-async function callDeepSeekAPI(payload, options = {}) {
-  const token = await getValidAccessToken();
-  if (!token) {
-    throw new Error('Please sign in with your magic link to continue.');
-  }
-  return fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-    signal: options.signal,
-  });
-}
-
-function setUserSession(session) {
-  window.userSession = session || null;
-  if (window.userSession) {
-    signInCooldownUntil = 0;
-    if (signInCooldownTimer) {
-      clearInterval(signInCooldownTimer);
-      signInCooldownTimer = null;
-    }
-  }
-  updateAuthUI();
-}
-
-function getSignInCooldownRemainingMs() {
-  return Math.max(0, signInCooldownUntil - Date.now());
-}
-
-function ensureSignInCooldownTicker() {
-  if (signInCooldownTimer) return;
-  signInCooldownTimer = setInterval(() => {
-    if (getSignInCooldownRemainingMs() <= 0) {
-      clearInterval(signInCooldownTimer);
-      signInCooldownTimer = null;
-    }
-    updateAuthUI();
-  }, 1000);
-}
-
-async function finalizeAuthFromUrl(client) {
-  const searchParams = new URLSearchParams(window.location.search || '');
-  const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
-  const code = searchParams.get('code') || hashParams.get('code');
-  const tokenHash = searchParams.get('token_hash') || hashParams.get('token_hash');
-  const type = searchParams.get('type') || hashParams.get('type');
-  const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
-  const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
-  const hasTokenFragment = !!(accessToken && refreshToken);
-
-  try {
-    if (code && typeof client.auth.exchangeCodeForSession === 'function') {
-      await client.auth.exchangeCodeForSession(code);
-    } else if (tokenHash && type && typeof client.auth.verifyOtp === 'function') {
-      await client.auth.verifyOtp({ token_hash: tokenHash, type });
-    } else if (hasTokenFragment) {
-      await client.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-    } else {
-      return;
-    }
-    const { data: { session } } = await client.auth.getSession();
-    if (session) setUserSession(session);
-  } catch (err) {
-    console.warn('Supabase callback exchange error:', err);
-  } finally {
-    if (code || tokenHash || type || hasTokenFragment) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }
-}
-
-async function initAuth() {
-  const client = await ensureSupabaseClient();
-  if (!client) {
-    updateAuthUI();
-    return;
-  }
-
-  try {
-    if (!authSubscriptionBound) {
-      client.auth.onAuthStateChange((event, data) => {
-        setUserSession(data?.session || null);
-      });
-      authSubscriptionBound = true;
-    }
-
-    await finalizeAuthFromUrl(client);
-    await syncAuthSession(client);
-  } catch (err) {
-    console.warn('Supabase auth init error:', err);
-  }
-}
-
-async function syncAuthSession(client = null) {
-  const authClient = client || await ensureSupabaseClient();
-  if (!authClient) {
-    setUserSession(null);
-    return null;
-  }
-  try {
-    const { data: { session } } = await authClient.auth.getSession();
-    if (session) {
-      setUserSession(session);
-      return session;
-    }
-    if (typeof authClient.auth.refreshSession === 'function') {
-      const refreshed = await authClient.auth.refreshSession().catch(() => null);
-      const refreshedSession = refreshed?.data?.session || null;
-      setUserSession(refreshedSession);
-      return refreshedSession;
-    }
-  } catch (err) {
-    console.warn('Supabase session sync error:', err);
-  }
-  setUserSession(null);
-  return null;
-}
-
-async function signInWithMagicLink() {
-  const remainingMs = getSignInCooldownRemainingMs();
-  if (remainingMs > 0) {
-    const waitSec = Math.ceil(remainingMs / 1000);
-    showToast(`Wait ${waitSec}s before requesting another link`, 2500);
-    updateAuthUI();
-    return;
-  }
-  const client = await ensureSupabaseClient();
-  if (!client || !isSupabaseConfigured()) {
-    showToast('Supabase config missing. Add env vars and redeploy.', 5500);
-    return;
-  }
-  const email = window.prompt('Enter your email to receive a Vantix AI magic link');
-  if (!email || !email.trim()) return;
-  try {
-    const emailRedirectTo = buildSafeAuthRedirectUrl();
-    const { error } = await client.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo }
-    });
-
-    if (error) {
-      showToast(`Sign in failed: ${error.message || 'unknown error'}`, 5000);
-      return;
-    }
-    signInCooldownUntil = Date.now() + SIGN_IN_COOLDOWN_MS;
-    ensureSignInCooldownTicker();
-    updateAuthUI();
-    showToast('Magic link sent. Check your inbox.', 5000);
-  } catch (err) {
-    const message = err?.message || 'Network request failed';
-    showToast(`Sign in failed: ${message}`, 5000);
-    console.warn('Magic link sign-in error:', err);
-  }
-}
-
-async function signOutUser() {
-  const client = await ensureSupabaseClient();
-  if (!client) {
-    showToast('Supabase client is not configured', 4000);
-    return;
-  }
-  const { error } = await client.auth.signOut();
-  setUserSession(null);
-  if (error) {
-    showToast(`⚠️ ${error.message || 'Sign out failed'}`, 4000);
-  } else {
-    showToast('Signed out successfully', 3000);
-  }
-}
-
-function updateAuthUI() {
-  const authInfo = document.getElementById('auth-info');
-  const authBtn = document.getElementById('auth-action-btn');
-  const dot = document.getElementById('api-status-dot');
-  const text = document.getElementById('api-status-text');
-  const email = window.userSession?.user?.email;
-
-  if (email) {
-    if (authInfo) authInfo.textContent = `Signed in as ${email}`;
-    if (authBtn) {
-      authBtn.disabled = false;
-      authBtn.textContent = 'Sign Out';
-      authBtn.onclick = signOutUser;
-    }
-    if (dot) dot.classList.add('connected');
-    if (text) text.textContent = 'Signed in';
-  } else {
-    if (authInfo) authInfo.textContent = 'Not signed in';
-    if (authBtn) {
-      const remaining = getSignInCooldownRemainingMs();
-      if (remaining > 0) {
-        const sec = Math.ceil(remaining / 1000);
-        authBtn.textContent = `Sign In (${sec}s)`;
-        authBtn.disabled = true;
-        authBtn.onclick = null;
-      } else {
-        authBtn.textContent = 'Sign In';
-        authBtn.disabled = false;
-        authBtn.onclick = signInWithMagicLink;
-      }
-    }
-    if (dot) dot.classList.remove('connected');
-    if (text) text.textContent = 'Please sign in';
-  }
+  return API_MODEL_ID;
 }
 
 const DEFAULT_PROMPTS = [
@@ -4659,7 +4369,7 @@ let state = {
     ttsEnabled: false,
   },
   theme: 'midnight',
-  mode: 'fast', // 'expert' | 'fast'
+  mode: 'expert', // 'expert' | 'fast'
   memories: [],
   prompts: [...DEFAULT_PROMPTS],
   gems: [...DEFAULT_GEMS],
@@ -4694,6 +4404,20 @@ let speechRecognition = null;
 let isRecording = false;
 let activeSpeechState = { convId: null, msgIdx: null };
 let autoScrollLocked = false;
+let firebaseServices = {
+  ready: false,
+  enabled: false,
+  auth: null,
+  db: null,
+  provider: null,
+  signInWithPopup: null,
+  signOut: null,
+  onAuthStateChanged: null,
+  doc: null,
+  setDoc: null,
+  serverTimestamp: null,
+};
+let currentUser = null;
 const CONTINUE_PROMPT_TEXT = 'Continue your previous assistant reply from exactly where it stopped. Output only the continuation—do not repeat paragraphs or code blocks you already sent.';
 let pendingConversationTitleIds = new Set();
 let composerHistoryState = {
@@ -4730,14 +4454,13 @@ function loadState() {
       state.conversations = saved.conversations || {};
       state.currentConvId = saved.currentConvId || null;
       state.settings = { ...state.settings, ...saved.settings };
-      delete state.settings.apiKey;
-      delete state.settings.model;
       delete state.settings.maxTokens;
+      delete state.settings.apiKey;
       if (!LOCAL_IMAGE_MODELS[state.settings.localImageModel]) {
-        state.settings.localImageModel = 'mobilenet';
+        state.settings.localImageModel = 'none';
       }
       state.theme = saved.theme || 'midnight';
-      state.mode = saved.mode || 'fast';
+      state.mode = saved.mode || 'expert';
       state.persona = PERSONA_META[saved.persona] ? saved.persona : 'vantix';
       state.memories = saved.memories || [];
       state.imageAnalysisCache = saved.imageAnalysisCache || {};
@@ -4778,6 +4501,192 @@ function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch(e) { console.warn('State save error:', e); }
+}
+
+function hasFirebaseConfig() {
+  return ['apiKey', 'authDomain', 'projectId', 'appId'].every(key => {
+    const value = FIREBASE_CONFIG[key];
+    return typeof value === 'string' && value.trim() && !value.startsWith('YOUR_');
+  });
+}
+
+async function initFirebase() {
+  if (!hasFirebaseConfig()) {
+    console.warn('Firebase config missing. Set window.VANTIX_FIREBASE_CONFIG or replace the placeholders in index.html.');
+    updateApiStatus();
+    updateAuthUI();
+    return;
+  }
+
+  try {
+    const [appMod, authMod, firestoreMod] = await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-auth.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`),
+    ]);
+
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    firebaseServices.auth = authMod.getAuth(app);
+    firebaseServices.db = firestoreMod.getFirestore(app);
+    firebaseServices.provider = new authMod.GoogleAuthProvider();
+    firebaseServices.provider.setCustomParameters({ prompt: 'select_account' });
+    firebaseServices.signInWithPopup = authMod.signInWithPopup;
+    firebaseServices.signOut = authMod.signOut;
+    firebaseServices.onAuthStateChanged = authMod.onAuthStateChanged;
+    firebaseServices.doc = firestoreMod.doc;
+    firebaseServices.setDoc = firestoreMod.setDoc;
+    firebaseServices.serverTimestamp = firestoreMod.serverTimestamp;
+    firebaseServices.enabled = true;
+    firebaseServices.ready = true;
+
+    firebaseServices.onAuthStateChanged(firebaseServices.auth, async (user) => {
+      currentUser = user || null;
+      updateAuthUI();
+      updateApiStatus();
+
+      if (currentUser && firebaseServices.db) {
+        try {
+          await firebaseServices.setDoc(
+            firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid),
+            {
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              photoURL: currentUser.photoURL || '',
+              lastLoginAt: firebaseServices.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        } catch (err) {
+          console.warn('Failed to sync Firestore user record:', err);
+        }
+      }
+    });
+  } catch (err) {
+    console.warn('Firebase initialization failed:', err);
+    updateApiStatus();
+    updateAuthUI();
+  }
+}
+
+function updateAuthUI() {
+  const signInBtn = document.getElementById('google-signin-btn');
+  const authUserEl = document.getElementById('auth-user');
+  const emailEl = document.getElementById('auth-user-email');
+  if (!signInBtn || !authUserEl || !emailEl) return;
+
+  if (!firebaseServices.enabled) {
+    signInBtn.disabled = true;
+    signInBtn.title = 'Add a valid Firebase config to enable Google sign-in';
+    authUserEl.hidden = true;
+    emailEl.textContent = '';
+    return;
+  }
+
+  signInBtn.disabled = !!currentUser;
+  signInBtn.title = currentUser ? 'Google account connected' : '';
+  authUserEl.hidden = !currentUser;
+  emailEl.textContent = currentUser?.email || '';
+}
+
+async function signInWithGoogle() {
+  if (!firebaseServices.enabled || !firebaseServices.auth || !firebaseServices.signInWithPopup) {
+    showToast('Add Firebase config to enable sign-in');
+    return;
+  }
+
+  try {
+    await firebaseServices.signInWithPopup(firebaseServices.auth, firebaseServices.provider);
+    showToast('Signed in with Google');
+  } catch (err) {
+    console.warn('Google sign-in failed:', err);
+    showToast(err?.message || 'Google sign-in failed');
+  }
+}
+
+async function signOutUser() {
+  if (!firebaseServices.enabled || !firebaseServices.auth || !firebaseServices.signOut) return;
+
+  try {
+    await firebaseServices.signOut(firebaseServices.auth);
+    showToast('Signed out');
+  } catch (err) {
+    console.warn('Sign-out failed:', err);
+    showToast('Sign-out failed');
+  }
+}
+
+async function postChatRequest(payload, signal) {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const fallbackMessage = `API error ${response.status}`;
+    const responseText = await response.text().catch(() => '');
+    try {
+      const json = JSON.parse(responseText);
+      throw new Error(json.error?.message || fallbackMessage);
+    } catch {
+      throw new Error(responseText || fallbackMessage);
+    }
+  }
+
+  if (!response.body) {
+    throw new Error('Streaming response body missing');
+  }
+
+  return response;
+}
+
+async function consumeChatStream(response, handlers = {}) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (!data || data === '[DONE]') continue;
+
+      try {
+        const json = JSON.parse(data);
+        if (json.usage && handlers.onUsage) handlers.onUsage(json.usage);
+        const choice = json.choices?.[0];
+        if (choice?.finish_reason && handlers.onFinishReason) handlers.onFinishReason(choice.finish_reason);
+        const delta = choice?.delta;
+        if (!delta) continue;
+        if (delta.reasoning_content && handlers.onReasoning) handlers.onReasoning(delta.reasoning_content);
+        if (delta.content && handlers.onContent) handlers.onContent(delta.content);
+      } catch (err) {
+        console.warn('Malformed stream chunk skipped:', err);
+      }
+    }
+  }
+}
+
+async function collectChatText(payload, signal) {
+  let text = '';
+  const response = await postChatRequest(payload, signal);
+  await consumeChatStream(response, {
+    onContent(chunk) {
+      text += chunk;
+    },
+  });
+  return text;
 }
 
 // ============================================================
@@ -4866,7 +4775,7 @@ function buildConversationTitleSource(conv, seedText = '') {
 }
 
 async function generateConversationTitle(conv, seedText) {
-  if (!conv || !userAuthToken()) return;
+  if (!conv) return;
   if (pendingConversationTitleIds.has(conv.id)) return;
   pendingConversationTitleIds.add(conv.id);
   const fallbackTitle = generateTitle(seedText || 'Conversation');
@@ -4876,25 +4785,18 @@ async function generateConversationTitle(conv, seedText) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-    const resp = await callDeepSeekAPI({
-        model: getApiModelId(),
-        stream: false,
-        messages: [
-          {
-            role: 'user',
-            content: `Create a specific chat title for this conversation.\nRules:\n- Use 2 to 6 words\n- Plain text only\n- No quotes\n- No punctuation at the beginning or end\n- Do not copy casual greetings like "yo what's up", "hey", or "hello" as the title\n- If the user's opener is vague, infer the real topic from the assistant reply\n- Prefer concrete topic words over generic labels\n\nConversation context:\n${sourceText}`,
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 32,
-      }, {
-      signal: controller.signal,
-    });
+    const rawTitle = await collectChatText({
+      model: getApiModelId(),
+      messages: [
+        {
+          role: 'user',
+          content: `Create a specific chat title for this conversation.\nRules:\n- Use 2 to 6 words\n- Plain text only\n- No quotes\n- No punctuation at the beginning or end\n- Do not copy casual greetings like "yo what's up", "hey", or "hello" as the title\n- If the user's opener is vague, infer the real topic from the assistant reply\n- Prefer concrete topic words over generic labels\n\nConversation context:\n${sourceText}`,
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 32,
+    }, controller.signal);
     clearTimeout(timeout);
-    if (!resp.ok) return;
-
-    const data = await resp.json();
-    const rawTitle = data.choices?.[0]?.message?.content || '';
     const nextTitle = sanitizeGeneratedTitle(rawTitle, fallbackTitle);
     if (!nextTitle) return;
     if (!state.conversations[conv.id]) return;
@@ -6209,9 +6111,10 @@ async function sendMessage() {
   if (!userText && attachedFiles.length === 0) return;
   if (isStreaming) return;
 
-  // Auth check
-  if (!userAuthToken()) {
-    showToast('Sign in to continue', 3000);
+  // API key check
+  if (false && !state.settings.apiKey) {
+    showToast('⚠️ Please add your API key in Settings', 3000);
+    openModal('settings-modal');
     return;
   }
 
@@ -6321,7 +6224,7 @@ async function sendMessage() {
     typingEl.remove();
     if (e.name !== 'AbortError') {
       // Show error message
-      const errMsg = { role: 'assistant', content: `⚠️ **Error:** ${e.message}\n\nPlease sign in and try again.` };
+      const errMsg = { role: 'assistant', content: `⚠️ **Error:** ${e.message}\n\nPlease try again in a moment.` };
       conv.messages.push(errMsg);
       const identity = getAssistantIdentity(conv);
       if (errMsg && typeof errMsg === 'object') {
@@ -6358,11 +6261,9 @@ function addTypingIndicator() {
 
 async function streamResponse(conv, typingEl) {
   const messages = conv.messages.map(messageToApiFormat);
-  const apiModelId = getApiModelId();
-  const allowThinking = state.thinkingEnabled && apiModelId === API_MODEL_ID;
 
   const body = {
-    model: apiModelId,
+    model: getApiModelId(),
     messages: [
       { role: 'system', content: buildSystemPrompt() },
       ...messages,
@@ -6374,11 +6275,17 @@ async function streamResponse(conv, typingEl) {
   };
 
   // Thinking
-  if (allowThinking) {
+  if (state.thinkingEnabled && getApiModelId() === API_MODEL_ID) {
     body.thinking = { type: 'enabled' };
   }
 
-  const response = await callDeepSeekAPI(body, {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${state.settings.apiKey}`,
+    },
+    body: JSON.stringify(body),
     signal: currentController.signal,
   });
 
@@ -6495,7 +6402,7 @@ async function streamResponse(conv, typingEl) {
         const delta = choice?.delta;
         if (!delta) continue;
 
-        if (allowThinking && delta.reasoning_content) {
+        if (delta.reasoning_content) {
           accumulatedReasoning += delta.reasoning_content;
           pendingReasoning = accumulatedReasoning;
         }
@@ -6565,7 +6472,7 @@ async function streamResponse(conv, typingEl) {
   renderChatList();
 
   // Generate follow-up questions — delayed so main thread can breathe
-  if (userAuthToken() && accumulatedContent.length > 50) {
+  if (state.settings.apiKey && accumulatedContent.length > 50) {
     setTimeout(() => generateFollowups(conv, msgWrapper, assistantMsg), 1200);
   }
 }
@@ -6582,7 +6489,13 @@ async function generateFollowups(conv, msgWrapper, assistantMsg) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000); // 10s hard timeout
 
-    const resp = await callDeepSeekAPI({
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.settings.apiKey}`,
+      },
+      body: JSON.stringify({
         model: getApiModelId(),
         stream: false,
         messages: [
@@ -6593,7 +6506,7 @@ async function generateFollowups(conv, msgWrapper, assistantMsg) {
         ],
         temperature: 0.7,
         max_tokens: 512,
-      }, {
+      }),
       signal: controller.signal,
     });
 
@@ -6646,8 +6559,9 @@ async function continueAssistantResponse(assistantMsgIndex) {
   if (!conv || !conv.messages[assistantMsgIndex]) return;
   const target = conv.messages[assistantMsgIndex];
   if (target.role !== 'assistant' || target.finishReason !== 'length' || target.continued) return;
-  if (!userAuthToken()) {
-    showToast('Sign in to continue');
+  if (false && !state.settings.apiKey) {
+    showToast('⚠️ Add your API key in Settings');
+    openModal('settings-modal');
     return;
   }
 
@@ -7173,6 +7087,8 @@ function showToast(message, duration = 2500) {
 // SETTINGS
 // ============================================================
 function openSettings() {
+  document.getElementById('api-key-input').value = state.settings.apiKey;
+  document.getElementById('model-select').value = state.settings.model;
   document.getElementById('system-prompt-input').value = state.settings.systemPrompt;
   document.getElementById('temp-slider').value = state.settings.temperature;
   const tDisp = parseFloat(state.settings.temperature).toFixed(1);
@@ -7183,6 +7099,8 @@ function openSettings() {
 }
 
 function saveSettings() {
+  state.settings.apiKey = document.getElementById('api-key-input').value.trim();
+  state.settings.model = document.getElementById('model-select').value;
   state.settings.systemPrompt = document.getElementById('system-prompt-input').value;
   state.settings.temperature = parseFloat(document.getElementById('temp-slider').value);
   saveState();
@@ -7225,12 +7143,15 @@ function saveSettings() {
 function updateApiStatus() {
   const dot = document.getElementById('api-status-dot');
   const text = document.getElementById('api-status-text');
-  if (userAuthToken()) {
+  if (!firebaseServices.enabled) {
+    dot.classList.remove('connected');
+    text.textContent = 'Add Firebase config';
+  } else if (currentUser) {
     dot.classList.add('connected');
-    text.textContent = window.userSession?.user?.email || 'Signed in';
+    text.textContent = currentUser.email || 'Signed in';
   } else {
     dot.classList.remove('connected');
-    text.textContent = 'Please sign in';
+    text.textContent = 'Signed out';
   }
 }
 
@@ -7676,8 +7597,7 @@ function estimateInputTokens(text) {
 
 function updateCharCount() {
   const ta = document.getElementById('input-textarea');
-  const charEl = document.getElementById('char-count');
-  if (charEl) charEl.textContent = ta.value.length;
+  document.getElementById('char-count').textContent = ta.value.length;
   const tokenEl = document.getElementById('input-token-count');
   if (tokenEl) tokenEl.textContent = `~${estimateInputTokens(ta.value).toLocaleString()} tokens`;
 }
@@ -7823,6 +7743,8 @@ function initEventListeners() {
   // Settings
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('topbar-settings-btn').addEventListener('click', openSettings);
+  document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
+  document.getElementById('signout-btn').addEventListener('click', signOutUser);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('settings-cancel').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('settings-close').addEventListener('click', () => closeModal('settings-modal'));
@@ -7927,23 +7849,11 @@ function initEventListeners() {
       requestAnimationFrame(updateAutoScrollPill);
     });
   }
-  const resetSessionStatsBtn = document.getElementById('reset-session-stats-btn');
-  if (resetSessionStatsBtn) {
-    resetSessionStatsBtn.addEventListener('click', () => {
-      state.sessionStats = [];
-      saveState();
-      drawSessionStatsSparkline();
-      showToast('Session stats reset');
-    });
-  }
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      syncAuthSession();
-    }
-  });
-  window.addEventListener('focus', () => {
-    syncAuthSession();
+  document.getElementById('reset-session-stats-btn').addEventListener('click', () => {
+    state.sessionStats = [];
+    saveState();
+    drawSessionStatsSparkline();
+    showToast('Session stats reset');
   });
 
   const mainArea = document.getElementById('main');
@@ -8261,10 +8171,8 @@ function addTypingIndicator() {
 async function streamResponse(conv, typingEl) {
   const messages = conv.messages.map(messageToApiFormat);
   const assistantIdentity = getAssistantIdentity(conv);
-  const apiModelId = getApiModelId();
-  const allowThinking = state.thinkingEnabled && apiModelId === API_MODEL_ID;
   const body = {
-    model: apiModelId,
+    model: getApiModelId(),
     messages: [
       { role: 'system', content: buildSystemPrompt() },
       ...messages,
@@ -8275,18 +8183,11 @@ async function streamResponse(conv, typingEl) {
     stream_options: { include_usage: true },
   };
 
-  if (allowThinking) {
+  if (state.thinkingEnabled && getApiModelId() === API_MODEL_ID) {
     body.thinking = { type: 'enabled' };
   }
 
-  const response = await callDeepSeekAPI(body, {
-    signal: currentController.signal,
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: { message: `HTTP ${response.status}` } }));
-    throw new Error(err.error?.message || `API error ${response.status}`);
-  }
+  const response = await postChatRequest(body, currentController.signal);
 
   typingEl.remove();
 
@@ -8319,12 +8220,10 @@ async function streamResponse(conv, typingEl) {
 
   scrollToBottomIfPinned();
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
   let rafPending = false;
-  let pendingContent = '';
   let pendingReasoning = '';
+  let renderedContent = '';
+  let contentQueue = '';
   let lastScrollTime = 0;
   let lastFinishReason = null;
   let lastUsage = null;
@@ -8349,9 +8248,15 @@ async function streamResponse(conv, typingEl) {
       thinkingBlockEl.querySelector('.thinking-body').innerHTML = `<div class="thinking-text">${escapeHtml(pendingReasoning)}</div>`;
     }
 
-    if (pendingContent) {
-      contentEl.innerHTML = renderMarkdown(pendingContent);
-      if (pendingContent.includes('```')) enhanceCodeBlocks(contentEl);
+    if (contentQueue) {
+      const revealCount = Math.max(1, Math.ceil(contentQueue.length / 12));
+      renderedContent += contentQueue.slice(0, revealCount);
+      contentQueue = contentQueue.slice(revealCount);
+    }
+
+    if (renderedContent) {
+      contentEl.innerHTML = renderMarkdown(renderedContent);
+      if (renderedContent.includes('```')) enhanceCodeBlocks(contentEl);
     }
 
     const now = Date.now();
@@ -8359,6 +8264,8 @@ async function streamResponse(conv, typingEl) {
       lastScrollTime = now;
       scrollToBottomIfPinned(false);
     }
+
+    if (contentQueue) queueStreamPaint();
   }
 
   function queueStreamPaint() {
@@ -8370,47 +8277,27 @@ async function streamResponse(conv, typingEl) {
     });
   }
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
+  await consumeChatStream(response, {
+    onUsage(usage) {
+      lastUsage = usage;
+    },
+    onFinishReason(reason) {
+      lastFinishReason = reason;
+    },
+    onReasoning(chunk) {
+      accumulatedReasoning += chunk;
+      pendingReasoning = accumulatedReasoning;
+      queueStreamPaint();
+    },
+    onContent(chunk) {
+      accumulatedContent += chunk;
+      contentQueue += chunk;
+      queueStreamPaint();
+    },
+  });
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const data = line.slice(6).trim();
-      if (data === '[DONE]') continue;
-
-      try {
-        const json = JSON.parse(data);
-        if (json.usage) lastUsage = json.usage;
-        const choice = json.choices?.[0];
-        const fr = choice?.finish_reason;
-        if (fr) lastFinishReason = fr;
-
-        const delta = choice?.delta;
-        if (!delta) continue;
-
-        if (allowThinking && delta.reasoning_content) {
-          accumulatedReasoning += delta.reasoning_content;
-          pendingReasoning = accumulatedReasoning;
-        }
-
-        if (delta.content) {
-          accumulatedContent += delta.content;
-          pendingContent = accumulatedContent;
-        }
-
-        queueStreamPaint();
-      } catch (e) {
-        // Ignore malformed chunks.
-      }
-    }
-  }
-
-  pendingContent = accumulatedContent;
+  renderedContent = accumulatedContent;
+  contentQueue = '';
   pendingReasoning = accumulatedReasoning;
   paintStreamFrame();
   scrollToBottomIfPinned(false);
@@ -8477,7 +8364,7 @@ async function streamResponse(conv, typingEl) {
   saveState();
   renderChatList();
 
-  if (userAuthToken() && accumulatedContent.length > 50) {
+  if (accumulatedContent.length > 50) {
     setTimeout(() => generateFollowups(conv, msgWrapper, assistantMsg), 1200);
   }
 }
@@ -8491,27 +8378,19 @@ async function generateFollowups(conv, msgWrapper, assistantMsg) {
     const contextSnippet = lastAsst.content.slice(0, 300);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-
-    const resp = await callDeepSeekAPI({
-        model: getApiModelId(),
-        stream: false,
-        messages: [
-          {
-            role: 'user',
-            content: `Based on this AI response snippet: "${contextSnippet.replace(/"/g, "'")}" - give me exactly 3 short follow-up questions a user might ask. Respond only with a valid JSON array of 3 short strings.`,
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 512,
-      }, {
-      signal: controller.signal,
-    });
+    const rawText = await collectChatText({
+      model: getApiModelId(),
+      messages: [
+        {
+          role: 'user',
+          content: `Based on this AI response snippet: "${contextSnippet.replace(/"/g, "'")}" - give me exactly 3 short follow-up questions a user might ask. Respond only with a valid JSON array of 3 short strings.`,
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 512,
+    }, controller.signal);
 
     clearTimeout(timeout);
-    if (!resp.ok) return;
-
-    const data = await resp.json();
-    const rawText = data.choices?.[0]?.message?.content || '[]';
     const clean = rawText.replace(/```json|```/g, '').trim();
     let questions;
     try { questions = JSON.parse(clean); } catch { return; }
@@ -8569,12 +8448,15 @@ function showToast(message, duration = 2500) {
 function updateApiStatus() {
   const dot = document.getElementById('api-status-dot');
   const text = document.getElementById('api-status-text');
-  if (userAuthToken()) {
+  if (!firebaseServices.enabled) {
+    dot.classList.remove('connected');
+    text.textContent = 'Add Firebase config';
+  } else if (currentUser) {
     dot.classList.add('connected');
-    text.textContent = window.userSession?.user?.email || 'Signed in';
+    text.textContent = currentUser.email || 'Signed in';
   } else {
     dot.classList.remove('connected');
-    text.textContent = 'Please sign in';
+    text.textContent = 'Signed out';
   }
 }
 
@@ -8588,9 +8470,11 @@ async function init() {
       'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 
+  await initFirebase();
+
   // Load state
   loadState();
-  await initAuth();
+  state.settings.apiKey = '__backend_proxy__';
 
   // Apply theme
   document.documentElement.dataset.theme = state.theme;
@@ -8635,9 +8519,9 @@ async function init() {
   initEventListeners();
   initCodeRunnerListeners();
 
-  // Welcome toast if signed out
-  if (!userAuthToken()) {
-    setTimeout(() => showToast('Sign in with magic link to get started'), 800);
+  // Welcome toast if Firebase config is missing
+  if (!firebaseServices.enabled) {
+    setTimeout(() => showToast('Add your Firebase config to enable Google sign-in'), 800);
   }
 
   console.log('%cVantix AI Neural Interface', 'font-size: 18px; font-weight: bold; color: #6366f1;');
