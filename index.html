@@ -596,6 +596,13 @@ select:focus:not(:focus-visible) {
   color: var(--text-secondary);
 }
 
+.usage-note {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
 .upgrade-btn {
   width: 100%;
   margin-top: 10px;
@@ -4021,6 +4028,7 @@ body::before {
           <div class="usage-bar-fill" id="usage-bar-fill"></div>
         </div>
         <div class="usage-meta" id="usage-meta">Sign in to view usage.</div>
+        <div class="usage-note" id="usage-note">Expert Mode uses 10x more Compute Units per message.</div>
       </div>
 
       <button class="btn-new-chat" id="new-chat-btn">
@@ -5052,6 +5060,12 @@ function canAccessExpertMode(profile = state.usageProfile || {}) {
   return role === 'admin' || ['pro', 'ultra', 'god_mode'].includes(planId);
 }
 
+function getRemainingUsageUnits(profile = state.usageProfile || {}) {
+  const tokenLimit = Number(profile.tokenLimit || 0);
+  const tokensUsed = Number(profile.tokensUsed || 0);
+  return tokenLimit - tokensUsed;
+}
+
 function getExpertModeDisclaimer(profile = state.usageProfile || {}) {
   if (canAccessExpertMode(profile)) {
     return 'Expert uses more tokens but gives better results.';
@@ -5063,6 +5077,7 @@ function updateModeUI() {
   const expertBtn = document.getElementById('mode-expert');
   const fastBtn = document.getElementById('mode-fast');
   const noteEl = document.getElementById('mode-tab-note');
+  const usageNoteEl = document.getElementById('usage-note');
   if (!expertBtn || !fastBtn || !noteEl) return;
 
   const expertAllowed = canAccessExpertMode(state.usageProfile);
@@ -5076,6 +5091,9 @@ function updateModeUI() {
   expertBtn.disabled = !expertAllowed;
   expertBtn.title = getExpertModeDisclaimer(state.usageProfile);
   noteEl.textContent = getExpertModeDisclaimer(state.usageProfile);
+  if (usageNoteEl) {
+    usageNoteEl.textContent = 'Expert Mode uses 10x more Compute Units per message.';
+  }
 }
 
 function updatePricingModalState(activePlanId = 'free', role = 'user') {
@@ -6916,6 +6934,10 @@ async function sendMessage() {
 
   if (!userText && attachedFiles.length === 0) return;
   if (isStreaming) return;
+  if (state.mode === 'expert' && state.usageProfile?.role !== 'admin' && getRemainingUsageUnits(state.usageProfile) < 1000) {
+    showToast('Insufficient units for Expert Mode. Switch to Fast Mode or Upgrade.');
+    return;
+  }
 
   // API key check
   if (false && !state.settings.apiKey) {
@@ -8068,7 +8090,7 @@ async function renderUsageStats() {
     if (role === 'admin') {
       planNameEl.textContent = planDef.label || 'God Mode';
       usageBarEl.hidden = true;
-      usageMetaEl.textContent = 'Unlimited admin usage.';
+      usageMetaEl.textContent = 'Unlimited admin compute units.';
       updateSubscriptionButton(state.usageProfile);
       updatePricingModalState(planId, role);
       updateModeUI();
@@ -8079,7 +8101,7 @@ async function renderUsageStats() {
     planNameEl.textContent = planDef.label || 'Free';
     usageBarEl.hidden = !planDef.showProgressBar;
     usageFillEl.style.width = `${pct}%`;
-    usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} tokens used`;
+    usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} compute units used`;
     updateSubscriptionButton(state.usageProfile);
     updatePricingModalState(planId, role);
     updateModeUI();

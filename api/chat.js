@@ -113,8 +113,16 @@ export default async function handler(req) {
     userProfile.role === 'admin' ||
     userProfile.email === getAdminEmail(planConfig) ||
     userEmail === getAdminEmail(planConfig);
+  const requestedModel = String(payload?.model || '');
+  const remainingUnits = Number(userProfile.tokenLimit || 0) - Number(userProfile.tokensUsed || 0);
   if (!isAdmin && userProfile.tokensUsed >= userProfile.tokenLimit) {
     return jsonResponse({ error: { message: 'Usage limit reached' } }, 403);
+  }
+  if (!isAdmin && requestedModel === 'deepseek-v4-pro' && remainingUnits < 1000) {
+    return jsonResponse(
+      { error: { message: 'Insufficient units for Expert Mode. Switch to Fast Mode or Upgrade.' } },
+      403
+    );
   }
 
   const upstreamPayload = {
@@ -177,9 +185,8 @@ export default async function handler(req) {
     } finally {
       try {
         if (!streamFailed && upstream.ok) {
-          const streamedText = extractContentFromSseChunk(rawSseText);
-          const approxTokens = Math.max(1, Math.ceil(streamedText.length / 4));
-          await incrementUserTokensUsed(userUid, approxTokens);
+          const usageDelta = calculateUsageUnitsFromSse(rawSseText, requestedModel);
+          await incrementUserTokensUsed(userUid, usageDelta);
         }
       } catch (error) {
         console.error('Failed to increment usage:', error);
@@ -555,8 +562,10 @@ function toSafeNumber(value, fallback) {
   return Number.isFinite(num) ? num : fallback;
 }
 
-function extractContentFromSseChunk(chunkText) {
-  let text = '';
+function calculateUsageUnitsFromSse(chunkText, modelId = '') {
+  let contentText = '';
+  let reasoningText = '';
+  let usage = null;
   const events = chunkText.split(/\r?\n\r?\n/);
   for (const event of events) {
     const data = event
@@ -569,10 +578,32 @@ function extractContentFromSseChunk(chunkText) {
     try {
       const json = JSON.parse(data);
       const delta = json.choices?.[0]?.delta;
-      if (delta?.content) text += delta.content;
+      if (delta?.content) contentText += delta.content;
+      if (delta?.reasoning_content) reasoningText += delta.reasoning_content;
+      if (json?.usage) usage = json.usage;
     } catch {
       // ignore malformed partial chunk fragments
     }
   }
-  return text;
+
+  const promptTokens = Number(usage?.prompt_tokens || 0);
+  const completionTokens = Number(usage?.completion_tokens || 0);
+  const totalTokens = Number(usage?.total_tokens || (promptTokens + completionTokens));
+  const reasoningTokens = Math.max(0, Math.ceil(reasoningText.length / 4));
+  const visibleTokens = Math.max(0, Math.ceil(contentText.length / 4));
+  let billableTokens = totalTokens > 0 ? totalTokens : Math.max(1, visibleTokens + reasoningTokens);
+
+  if (isExpertModel(modelId)) {
+    billableTokens += reasoningTokens;
+  }
+
+  const weightedUnits = isExpertModel(modelId)
+    ? billableTokens * 10
+    : billableTokens;
+
+  return Math.max(1, Math.ceil(weightedUnits));
+}
+
+function isExpertModel(modelId = '') {
+  return String(modelId || '') === 'deepseek-v4-pro';
 }
