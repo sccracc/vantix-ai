@@ -994,8 +994,11 @@ select:focus:not(:focus-visible) {
 .message {
   display: flex;
   gap: 12px;
-  animation: messageIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   max-width: 100%;
+}
+
+.message.entering {
+  animation: messageIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 @keyframes messageIn {
@@ -7310,8 +7313,7 @@ async function streamResponse(conv, typingEl) {
   // Create live message element
   const container = document.getElementById('messages');
   const msgWrapper = document.createElement('div');
-  msgWrapper.className = 'message assistant';
-  msgWrapper.style.animation = 'messageIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both';
+  msgWrapper.className = 'message assistant entering';
   container.appendChild(msgWrapper);
 
   const avatarEl = document.createElement('div');
@@ -9257,7 +9259,7 @@ function createMessageElement(msg, idx) {
 function createTypingIndicatorElement() {
   const identity = getAssistantIdentity();
   const el = document.createElement('div');
-  el.className = 'typing-indicator message assistant';
+  el.className = 'typing-indicator message assistant entering';
   el.id = 'typing-indicator';
   el.innerHTML = `
     <div class="avatar ai-avatar">${escapeHtml(identity.avatar)}</div>
