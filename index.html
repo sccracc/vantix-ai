@@ -4997,7 +4997,7 @@ const FAST_MODEL_ID = 'deepseek-chat';
 const API_URL = '/api/chat';
 const BUILD_ID = '2026-04-26-stream-debug-4';
 const DEFAULT_PLAN_CONFIG = {
-  adminEmail: 'socceracctiktok@gmail.com',
+  adminEmail: '',
   defaultPlanId: 'free',
   plans: {
     free: {
@@ -5033,15 +5033,7 @@ const DEFAULT_PLAN_CONFIG = {
   },
 };
 const FIREBASE_VERSION = '10.12.5';
-const FIREBASE_CONFIG = window.VANTIX_FIREBASE_CONFIG || {
-  apiKey: "AIzaSyDtzJtUtMKPS84G9-0p1S1hHA_DsNYG-JM",
-  authDomain: "vantix-ai-9859d.firebaseapp.com",
-  projectId: "vantix-ai-9859d",
-  storageBucket: "vantix-ai-9859d.firebasestorage.app",
-  messagingSenderId: "570645716558",
-  appId: "1:570645716558:web:17cf732affbbfcd396ed1f",
-  measurementId: "G-REKYGK32XZ"
-};
+const FIREBASE_CONFIG = window.VANTIX_FIREBASE_CONFIG || {};
 
 
 function maxCompletionTokensForModel() {
@@ -5575,16 +5567,12 @@ function getDefaultTokenLimit() {
   return Number(getPlanDefinition(getDefaultPlanId()).tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit);
 }
 
-function isAdminEmail(email = '') {
-  return String(email || '').toLowerCase() === String(getAdminEmail() || '').toLowerCase();
-}
-
 function isAdminRole(role = '') {
   return String(role || '').toLowerCase() === 'admin';
 }
 
 function isAdminUserRecord(userDoc = {}) {
-  return !!(window.isGodMode || isAdminRole(userDoc.role) || isAdminEmail(userDoc.email || currentUser?.email || ''));
+  return !!(window.isGodMode || isAdminRole(userDoc.role));
 }
 
 function getUsageRole(userDoc = {}) {
@@ -5953,7 +5941,7 @@ async function loadPlanConfig() {
 
 async function initFirebase() {
   if (!hasFirebaseConfig()) {
-    console.warn('Firebase config missing. Set window.VANTIX_FIREBASE_CONFIG or replace the placeholders in index.html.');
+    console.warn('Firebase config missing. Set window.VANTIX_FIREBASE_CONFIG at runtime.');
     updateApiStatus();
     updateAuthUI();
     return;
@@ -7702,9 +7690,9 @@ function getSystemPrompt() {
   const currentDate = getCurrentDateString();
   const currentPlan = getCurrentUserPlanLabel();
   const currentBalance = getCurrentUserBalanceLabel();
-  const currentEmail = String(currentUser?.email || '');
   const expertAccess = canAccessExpertMode(state.usageProfile);
   const searchAccess = canAccessSearch(state.usageProfile);
+  const leadDeveloperMode = state.usageProfile?.role === 'admin';
   const freePlan = getPlanDefinition('free');
   const starterPlan = getPlanDefinition('starter');
   const proPlan = getPlanDefinition('pro');
@@ -7753,12 +7741,12 @@ To save the user Compute Units, you actively summarize older messages in the bac
 
 Current User Context:
 The user you are currently speaking to is on the ${currentPlan} tier and currently has ${currentBalance} Compute Units remaining.
-(If the user email is socceracctiktok@gmail.com, you may occasionally refer to them as "Lead Developer" or "Commander").`;
+(If this user is the admin / lead-developer account, you may occasionally refer to them as "Lead Developer" or "Commander").`;
 
   sys += `\n\nFeature Access Rules:\n- This user ${expertAccess ? 'does' : 'does not'} currently have access to Expert Mode.\n- This user ${searchAccess ? 'does' : 'does not'} currently have access to Web Search.\n- Do not suggest testing, switching to, or trying Expert Mode unless the user currently has access to it.\n- Do not imply the user can use Web Search unless the user currently has access to it.\n- When discussing plans or upgrades, keep recommendations consistent with the live plan and feature access above.`;
 
-  if (currentEmail.toLowerCase() === 'socceracctiktok@gmail.com') {
-    sys += `\n\nInternal Note: This user email matches socceracctiktok@gmail.com. You may occasionally refer to them as "Lead Developer" or "Commander".`;
+  if (leadDeveloperMode) {
+    sys += `\n\nInternal Note: This user is the admin / lead-developer account. You may occasionally refer to them as "Lead Developer" or "Commander".`;
   }
 
   if (state.settings.systemPrompt) {
