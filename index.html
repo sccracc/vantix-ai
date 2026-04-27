@@ -5515,10 +5515,19 @@ function isExpertModel(modelId = '') {
   return String(modelId || '') === 'deepseek-v4-pro';
 }
 
+function getUsageResetKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function shouldResetFreeUsage(profile = {}) {
+  return String(profile.planId || '') === 'free' && String(profile.freeUsageResetDate || profile.usageResetDate || '') !== getUsageResetKey();
+}
+
 function getRemainingUsageUnits(profile = state.usageProfile || {}) {
-  const tokenLimit = Number(profile.tokenLimit || 0);
-  const tokensUsed = Number(profile.tokensUsed || 0);
-  const creditBalance = Number(profile.creditBalance || 0);
+  const normalized = normalizeFreeUsageProfile(profile);
+  const tokenLimit = Number(normalized.tokenLimit || 0);
+  const tokensUsed = Number(normalized.tokensUsed || 0);
+  const creditBalance = Number(normalized.creditBalance || 0);
   return (tokenLimit - tokensUsed) + creditBalance;
 }
 
@@ -5536,6 +5545,16 @@ function applyOptimisticUsageDelta(usage, modelId = getApiModelId()) {
   const delta = calculateUsageUnitsFromUsage(usage, modelId);
   if (!delta) return;
   state.usageProfile.tokensUsed = Number(state.usageProfile.tokensUsed || 0) + delta;
+}
+
+function normalizeFreeUsageProfile(profile = {}) {
+  if (!shouldResetFreeUsage(profile)) return profile;
+  return {
+    ...profile,
+    tokensUsed: 0,
+    freeUsageResetDate: getUsageResetKey(),
+    usageResetDate: getUsageResetKey(),
+  };
 }
 
 function queueUsageStatsRefresh(delays = [150, 700, 1600]) {
@@ -8731,7 +8750,8 @@ async function renderUsageStats() {
     const planId = getDisplayPlanId(role, userDoc);
     const planDef = getPlanDefinition(planId);
     const tokenLimit = resolveUserTokenLimit(userDoc, role, planId);
-    const tokensUsed = Number(userDoc.tokensUsed || 0);
+    const normalizedUserDoc = role === 'admin' ? userDoc : normalizeFreeUsageProfile(userDoc);
+    const tokensUsed = Number(normalizedUserDoc.tokensUsed || 0);
     const creditBalance = Number(userDoc.creditBalance || 0);
     state.usageProfile = {
       role,
@@ -8739,6 +8759,8 @@ async function renderUsageStats() {
       tokenLimit,
       tokensUsed,
       creditBalance,
+      freeUsageResetDate: normalizedUserDoc.freeUsageResetDate || normalizedUserDoc.usageResetDate || '',
+      usageResetDate: normalizedUserDoc.usageResetDate || normalizedUserDoc.freeUsageResetDate || '',
     };
 
     if (role === 'admin') {

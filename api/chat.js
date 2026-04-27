@@ -251,6 +251,8 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
       tokenLimit: Number(defaultPlan.tokenLimit || DEFAULT_PLAN_CONFIG.plans.free.tokenLimit),
       creditBalance: 0,
       topupBalance: 0,
+      freeUsageResetDate: getUsageResetKey(),
+      usageResetDate: getUsageResetKey(),
     };
     await upsertUserProfileDefaults(uid, profile, accessToken, projectId);
     return profile;
@@ -276,7 +278,14 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
     tokenLimit: resolveUserTokenLimit(fields, role, defaultPlanId, planConfig),
     creditBalance: toSafeNumber(fields.creditBalance ?? fields.topupBalance, 0),
     topupBalance: toSafeNumber(fields.topupBalance ?? fields.creditBalance, 0),
+    freeUsageResetDate: String(fields.freeUsageResetDate || fields.usageResetDate || ''),
+    usageResetDate: String(fields.usageResetDate || fields.freeUsageResetDate || ''),
   };
+  if (shouldResetFreeUsage(fields)) {
+    profile.tokensUsed = 0;
+    profile.freeUsageResetDate = getUsageResetKey();
+    profile.usageResetDate = getUsageResetKey();
+  }
   if (
     !fields.role ||
     !fields.plan ||
@@ -284,6 +293,7 @@ async function getUserProfile(uid, fallbackEmail = '', planConfig = DEFAULT_PLAN
     typeof fields.tokenLimit === 'undefined' ||
     typeof fields.creditBalance === 'undefined' ||
     typeof fields.topupBalance === 'undefined' ||
+    (profile.planId === 'free' && shouldResetFreeUsage(fields)) ||
     Number(fields.tokenLimit) !== Number(profile.tokenLimit)
   ) {
     await upsertUserProfileDefaults(uid, profile, accessToken, projectId);
@@ -329,6 +339,18 @@ function getStoredPlanId(fields = {}, planConfig = DEFAULT_PLAN_CONFIG) {
   return String(fields.plan || fields.planId || getDefaultPlanId(planConfig));
 }
 
+function getUsageResetKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getFreeUsageResetField(fields = {}) {
+  return String(fields.freeUsageResetDate || fields.usageResetDate || '');
+}
+
+function shouldResetFreeUsage(fields = {}) {
+  return getStoredPlanId(fields) === 'free' && getFreeUsageResetField(fields) !== getUsageResetKey();
+}
+
 function resolveUserTokenLimit(fields = {}, role = 'user', planId = getDefaultPlanId(DEFAULT_PLAN_CONFIG), planConfig = DEFAULT_PLAN_CONFIG) {
   const effectivePlanId = role === 'admin' ? 'god_mode' : planId;
   const planDef = getPlanDefinition(planConfig, effectivePlanId);
@@ -348,7 +370,7 @@ function resolveUserTokenLimit(fields = {}, role = 'user', planId = getDefaultPl
 
 async function upsertUserProfileDefaults(uid, profile, accessToken, projectId) {
   const baseUrl = `${FIRESTORE_BASE_URL}/projects/${projectId}/databases/(default)/documents/users/${encodeURIComponent(uid)}`;
-  const updateMask = ['email', 'role', 'plan', 'planId', 'tokenLimit', 'tokensUsed', 'creditBalance', 'topupBalance'];
+  const updateMask = ['email', 'role', 'plan', 'planId', 'tokenLimit', 'tokensUsed', 'creditBalance', 'topupBalance', 'freeUsageResetDate', 'usageResetDate'];
   const params = new URLSearchParams();
   updateMask.forEach(field => params.append('updateMask.fieldPaths', field));
 
@@ -369,6 +391,8 @@ async function upsertUserProfileDefaults(uid, profile, accessToken, projectId) {
         tokensUsed: Number(profile.tokensUsed || 0),
         creditBalance: Number(profile.creditBalance || 0),
         topupBalance: Number(profile.topupBalance || profile.creditBalance || 0),
+        freeUsageResetDate: String(profile.freeUsageResetDate || getUsageResetKey()),
+        usageResetDate: String(profile.usageResetDate || getUsageResetKey()),
       }),
     }),
   });
