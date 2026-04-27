@@ -5483,6 +5483,13 @@ function getUsageRole(userDoc = {}) {
   return isAdminUserRecord(userDoc) ? 'admin' : 'user';
 }
 
+const LEGACY_PLAN_LIMITS = {
+  free: [10000],
+  starter: [1000000],
+  pro: [5000000],
+  ultra: [25000000],
+};
+
 function resolveUserTokenLimit(userDoc = {}, role = 'user', planId = getDefaultPlanId()) {
   const effectivePlanId = role === 'admin' ? 'god_mode' : planId;
   const planDef = getPlanDefinition(effectivePlanId);
@@ -5490,6 +5497,7 @@ function resolveUserTokenLimit(userDoc = {}, role = 'user', planId = getDefaultP
   const storedTokenLimit = Number(userDoc.tokenLimit);
   if (!Number.isFinite(storedTokenLimit)) return planTokenLimit;
   if (storedTokenLimit === planTokenLimit) return storedTokenLimit;
+  if ((LEGACY_PLAN_LIMITS[effectivePlanId] || []).includes(storedTokenLimit)) return planTokenLimit;
 
   const knownPlanLimits = new Set(
     Object.values(planConfig?.plans || DEFAULT_PLAN_CONFIG.plans)

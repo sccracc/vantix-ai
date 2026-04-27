@@ -351,6 +351,13 @@ function shouldResetFreeUsage(fields = {}) {
   return getStoredPlanId(fields) === 'free' && getFreeUsageResetField(fields) !== getUsageResetKey();
 }
 
+const LEGACY_PLAN_LIMITS = {
+  free: [10000],
+  starter: [1000000],
+  pro: [5000000],
+  ultra: [25000000],
+};
+
 function resolveUserTokenLimit(fields = {}, role = 'user', planId = getDefaultPlanId(DEFAULT_PLAN_CONFIG), planConfig = DEFAULT_PLAN_CONFIG) {
   const effectivePlanId = role === 'admin' ? 'god_mode' : planId;
   const planDef = getPlanDefinition(planConfig, effectivePlanId);
@@ -358,6 +365,7 @@ function resolveUserTokenLimit(fields = {}, role = 'user', planId = getDefaultPl
   const storedTokenLimit = Number(fields.tokenLimit);
   if (!Number.isFinite(storedTokenLimit)) return planTokenLimit;
   if (storedTokenLimit === planTokenLimit) return storedTokenLimit;
+  if ((LEGACY_PLAN_LIMITS[effectivePlanId] || []).includes(storedTokenLimit)) return planTokenLimit;
 
   const knownPlanLimits = new Set(
     Object.values(planConfig?.plans || DEFAULT_PLAN_CONFIG.plans)
