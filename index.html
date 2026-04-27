@@ -5345,10 +5345,16 @@ function normalizeConversation(conv) {
     title: typeof conv.title === 'string' && conv.title.trim() ? conv.title : 'Conversation',
     gemId: typeof conv.gemId === 'string' ? conv.gemId : '',
     messages: Array.isArray(conv.messages) ? conv.messages : [],
+    summary: typeof conv.summary === 'string' ? conv.summary : '',
+    lastSummarizedIndex: Number.isInteger(conv.lastSummarizedIndex) ? conv.lastSummarizedIndex : -1,
     branches: Array.isArray(conv.branches) ? conv.branches : [],
     createdAt: Number(conv.createdAt || Date.now()),
     updatedAt: Number(conv.updatedAt || Date.now()),
   };
+  if (normalized.lastSummarizedIndex < -1 || normalized.lastSummarizedIndex >= normalized.messages.length) {
+    normalized.summary = '';
+    normalized.lastSummarizedIndex = -1;
+  }
   normalized.messages.forEach(msg => {
     if (msg.role === 'assistant') {
       if (typeof msg.assistantLabel !== 'string' || !msg.assistantLabel) {
@@ -5360,6 +5366,111 @@ function normalizeConversation(conv) {
     }
   });
   return normalized;
+}
+
+function getConversationSummaryTargetIndex(conv) {
+  if (!conv || !Array.isArray(conv.messages) || conv.messages.length === 0) return -1;
+  const lastIndex = conv.messages.length - 1;
+  return conv.messages[lastIndex]?.role === 'user' ? lastIndex - 1 : lastIndex;
+}
+
+function clampConversationSummaryState(conv) {
+  if (!conv) return;
+  const messageCount = Array.isArray(conv.messages) ? conv.messages.length : 0;
+  if (!Number.isInteger(conv.lastSummarizedIndex)) conv.lastSummarizedIndex = -1;
+  if (conv.lastSummarizedIndex < -1 || conv.lastSummarizedIndex >= messageCount) {
+    conv.summary = '';
+    conv.lastSummarizedIndex = -1;
+  }
+  if (typeof conv.summary !== 'string') conv.summary = '';
+}
+
+function formatConversationMessagesForSummary(messages = []) {
+  return messages
+    .map(msg => {
+      const formatted = messageToApiFormat(msg);
+      return `${String(formatted.role || 'user').toUpperCase()}:\n${formatted.content || ''}`;
+    })
+    .join('\n\n');
+}
+
+async function maybeSummarizeConversationInBackground(conv) {
+  if (!conv || !currentUser) return;
+  clampConversationSummaryState(conv);
+  const targetIndex = getConversationSummaryTargetIndex(conv);
+  if (targetIndex < 0) return;
+
+  const lastSummarizedIndex = Number(conv.lastSummarizedIndex || -1);
+  const unsummarizedCount = targetIndex - lastSummarizedIndex;
+  if (unsummarizedCount <= SUMMARY_TRIGGER_MESSAGE_COUNT) return;
+  if (activeConversationSummaryJobs.has(conv.id)) return;
+
+  const unsummarizedMessages = conv.messages.slice(lastSummarizedIndex + 1, targetIndex + 1);
+  if (!unsummarizedMessages.length) return;
+
+  activeConversationSummaryJobs.set(conv.id, targetIndex);
+  try {
+    const promptParts = [SUMMARY_PROMPT_TEXT];
+    if (conv.summary.trim()) {
+      promptParts.push(`Existing summary:\n${conv.summary.trim()}`);
+    }
+    promptParts.push(`Conversation messages:\n${formatConversationMessagesForSummary(unsummarizedMessages)}`);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const nextSummary = await collectChatText({
+      model: FAST_MODEL_ID,
+      mode: 'fast',
+      messages: [
+        {
+          role: 'user',
+          content: promptParts.join('\n\n'),
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: 512,
+    }, controller.signal);
+    clearTimeout(timeout);
+
+    const liveConv = state.conversations[conv.id];
+    if (!liveConv) return;
+    clampConversationSummaryState(liveConv);
+    if (targetIndex >= liveConv.messages.length) return;
+    if (targetIndex <= liveConv.lastSummarizedIndex) return;
+
+    const trimmedSummary = String(nextSummary || '').trim();
+    if (!trimmedSummary) return;
+
+    liveConv.summary = trimmedSummary;
+    liveConv.lastSummarizedIndex = targetIndex;
+    liveConv.updatedAt = Date.now();
+    saveState();
+    persistConversationToFirestore(liveConv);
+  } catch (err) {
+    console.warn('Conversation summarization skipped:', err);
+  } finally {
+    activeConversationSummaryJobs.delete(conv.id);
+  }
+}
+
+function buildMessagesForApi(conv) {
+  if (!conv) {
+    return [{ role: 'system', content: buildSystemPrompt() }];
+  }
+  clampConversationSummaryState(conv);
+  void maybeSummarizeConversationInBackground(conv);
+
+  const messages = [{ role: 'system', content: buildSystemPrompt() }];
+  if (conv.summary.trim()) {
+    messages.push({
+      role: 'system',
+      content: `Conversation summary:\n${conv.summary.trim()}`,
+    });
+  }
+
+  const startIndex = Math.max(0, Number(conv.lastSummarizedIndex || -1) + 1);
+  messages.push(...conv.messages.slice(startIndex).map(messageToApiFormat));
+  return messages;
 }
 
 function conversationDocRef(convId) {
@@ -5524,7 +5635,12 @@ function isExpertModel(modelId = '') {
 }
 
 function getUsageResetKey() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function shouldResetFreeUsage(profile = {}) {
@@ -5539,18 +5655,26 @@ function getRemainingUsageUnits(profile = state.usageProfile || {}) {
   return (tokenLimit - tokensUsed) + creditBalance;
 }
 
-function calculateUsageUnitsFromUsage(usage, modelId = getApiModelId()) {
+function isDiscountedPlan(planId = '') {
+  return ['pro', 'ultra'].includes(String(planId || '').toLowerCase());
+}
+
+function calculateUsageUnitsFromUsage(usage, modelId = getApiModelId(), planId = state.usageProfile?.planId || getDefaultPlanId(), mode = state.mode) {
   if (!usage) return 0;
   const promptTokens = Number(usage.prompt_tokens || 0);
   const completionTokens = Number(usage.completion_tokens || 0);
-  const totalTokens = Number(usage.total_tokens || (promptTokens + completionTokens));
-  if (!totalTokens) return 0;
-  return Math.max(1, Math.ceil(isExpertModel(modelId) ? totalTokens * 10 : totalTokens));
+  const fallbackTotal = Number(usage.total_tokens || (promptTokens + completionTokens));
+  const discountedPromptTokens = isDiscountedPlan(planId) ? Math.floor(promptTokens / 2) : promptTokens;
+  const baseUnits = (promptTokens || completionTokens)
+    ? (discountedPromptTokens + completionTokens)
+    : fallbackTotal;
+  if (!baseUnits) return 0;
+  return Math.max(1, Math.ceil(mode === 'expert' ? baseUnits * 10 : baseUnits));
 }
 
-function applyOptimisticUsageDelta(usage, modelId = getApiModelId()) {
+function applyOptimisticUsageDelta(usage, modelId = getApiModelId(), mode = state.mode) {
   if (!state.usageProfile || state.usageProfile.role === 'admin') return;
-  const delta = calculateUsageUnitsFromUsage(usage, modelId);
+  const delta = calculateUsageUnitsFromUsage(usage, modelId, state.usageProfile.planId, mode);
   if (!delta) return;
   state.usageProfile.tokensUsed = Number(state.usageProfile.tokensUsed || 0) + delta;
 }
@@ -5980,6 +6104,7 @@ async function signOutUser() {
 }
 
 async function postChatRequest(payload, signal) {
+  const derivedMode = payload?.mode || (String(payload?.model || '') === EXPERT_MODEL_ID ? 'expert' : 'fast');
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: {
@@ -5990,7 +6115,10 @@ async function postChatRequest(payload, signal) {
       ...(currentUser?.uid ? { 'X-Vantix-Uid': currentUser.uid } : {}),
       ...(currentUser?.email ? { 'X-Vantix-Email': currentUser.email } : {}),
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      mode: derivedMode,
+    }),
     signal,
   });
 
@@ -6104,6 +6232,8 @@ function createConversation() {
     title: 'New Conversation',
     gemId: state.activeGemId || '',
     messages: [],
+    summary: '',
+    lastSummarizedIndex: -1,
     branches: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -7498,29 +7628,93 @@ function messageToApiFormat(m) {
   return { role: m.role, content: m.content };
 }
 
+const SUMMARY_TRIGGER_MESSAGE_COUNT = 10;
+const SUMMARY_PROMPT_TEXT = 'Summarize this conversation concisely to retain context for an AI assistant.';
+const activeConversationSummaryJobs = new Map();
+
 // ============================================================
 // API COMMUNICATION
 // ============================================================
 function getCurrentDateString() {
-  return new Date().toLocaleDateString('en-US', {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  });
+  }).format(new Date());
+}
+
+function getCurrentUserPlanLabel() {
+  const profile = state.usageProfile || {};
+  const planId = profile.role === 'admin' ? 'god_mode' : (profile.planId || getDefaultPlanId());
+  return getPlanDefinition(planId).label || planId;
+}
+
+function getCurrentUserBalanceLabel() {
+  const profile = state.usageProfile || {};
+  if (profile.role === 'admin') return 'Unlimited';
+  return Number(getRemainingUsageUnits(profile) || 0).toLocaleString();
 }
 
 function getSystemPrompt() {
   const currentDate = getCurrentDateString();
-  const personaPrompt = getPersonaPrompt();
-  const identityPrompt = [
-    `Knowledge Cutoff Override: Today is ${currentDate}. You are Vantix AI.`,
-    'You are currently operating in the year 2026. Do not refer to yourself as being in 2025. You are the Vantix AI Neural Interface, a cutting-edge model released in 2026.',
-    'If asked about your identity, you must never mention Anthropic, Claude, OpenAI, or Google. You were developed by Vantix Labs.',
-  ].join('\n');
-  let sys = [identityPrompt, personaPrompt, state.settings.systemPrompt || '']
-    .filter(Boolean)
-    .join('\n\n');
+  const currentPlan = getCurrentUserPlanLabel();
+  const currentBalance = getCurrentUserBalanceLabel();
+  const currentEmail = String(currentUser?.email || '');
+  let sys = `Knowledge Cutoff Override: Today is ${currentDate}. You are operating in the year 2026.
+
+Identity & Core Directive:
+You are Vantix AI, the core intelligence behind the Vantix Neural Interface developed by Vantix Labs. You are a top-of-the-line, premium AI model designed to provide elite-level reasoning at an insanely accessible price point.
+
+You must never identify as Claude, Anthropic, GPT, OpenAI, DeepSeek, or any other third-party system. You are strictly Vantix.
+
+Your tone is calm, sharp, modern, and intellectually generous. You speak with the authority of a senior engineer.
+
+Format responses cleanly using Markdown, matching the 'Midnight' and 'Neural' aesthetic of your interface.
+
+Compute Units & Billing Mechanics:
+You operate on a "Compute Unit" system. You must understand your own pricing tiers to assist users:
+
+Fast Mode: Uses standard intelligence. Costs 1 Unit per token. Available to everyone.
+
+Expert Mode: Uses deep-reasoning traces. Costs 10 Units per token. Locked behind Pro and Ultra plans.
+
+Pro/Ultra Perk: Users on these tiers automatically receive a 50% discount on all input tokens.
+
+Monthly Subscription Tiers:
+
+Free Tier: 50,000 Units per day (resets daily at Midnight EST). Casual use only. No Expert Mode.
+
+Starter Plan ($10/mo): 1,250,000 Units per month. Best for students. Includes Web Search. No Expert Mode.
+
+Pro Plan ($20/mo): 6,500,000 Units per month. Unlocks Expert Mode. Best for active creators and developers.
+
+Ultra Plan ($50/mo): 35,000,000 Units per month. Unlocks Expert Mode. Designed for heavy research and infinite scaling.
+
+The Vault (One-Time Top-Ups):
+If users run out of monthly units, they can buy non-expiring units that stay in their 'Vault':
+
+Quick Refill ($2): 50,000 Units.
+
+Power Up ($7): 250,000 Units.
+
+The Vault ($20): 1,000,000 Units.
+
+Context & Memory:
+To save the user Compute Units, you actively summarize older messages in the background. If a user asks about missing context, assure them you have a compressed summary of the conversation.
+
+Current User Context:
+The user you are currently speaking to is on the ${currentPlan} tier and currently has ${currentBalance} Compute Units remaining.
+(If the user email is socceracctiktok@gmail.com, you may occasionally refer to them as "Lead Developer" or "Commander").`;
+
+  if (currentEmail.toLowerCase() === 'socceracctiktok@gmail.com') {
+    sys += `\n\nInternal Note: This user email matches socceracctiktok@gmail.com. You may occasionally refer to them as "Lead Developer" or "Commander".`;
+  }
+
+  if (state.settings.systemPrompt) {
+    sys += `\n\n## Additional System Prompt\n${state.settings.systemPrompt}`;
+  }
   const conv = getCurrentConv();
   const gem = conv?.gemId ? state.gems.find(g => g.id === conv.gemId) : null;
 
@@ -7614,6 +7808,7 @@ async function sendMessage() {
   if (branchPointApplied) {
     archivedBranchId = archiveConversationBranch(conv, branchPoint.index, userText);
     conv.messages = conv.messages.slice(0, branchPoint.index);
+    clampConversationSummaryState(conv);
   }
 
   const userMsg = {
@@ -7712,14 +7907,10 @@ function addTypingIndicator() {
 }
 
 async function streamResponse(conv, typingEl) {
-  const messages = conv.messages.map(messageToApiFormat);
-
   const body = {
     model: getApiModelId(),
-    messages: [
-      { role: 'system', content: buildSystemPrompt() },
-      ...messages,
-    ],
+    mode: state.mode,
+    messages: buildMessagesForApi(conv),
     temperature: state.settings.temperature,
     max_tokens: maxCompletionTokensForModel(),
     stream: true,
@@ -7877,8 +8068,9 @@ async function streamResponse(conv, typingEl) {
   conv.messages.push(assistantMsg);
   conv.updatedAt = Date.now();
   persistConversationToFirestore(conv);
+  void maybeSummarizeConversationInBackground(conv);
   if (lastUsage) {
-    applyOptimisticUsageDelta(lastUsage, body.model);
+    applyOptimisticUsageDelta(lastUsage, body.model, body.mode);
     await renderUsageStats();
     queueUsageStatsRefresh();
   }
@@ -8063,6 +8255,7 @@ async function regenerateMessage(msgIdx) {
 
   // Remove all messages from msgIdx onwards
   conv.messages = conv.messages.slice(0, msgIdx);
+  clampConversationSummaryState(conv);
   conv.updatedAt = Date.now();
   isStreaming = true;
   currentController = new AbortController();

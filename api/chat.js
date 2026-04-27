@@ -114,6 +114,7 @@ export default async function handler(req) {
     userProfile.email === getAdminEmail(planConfig) ||
     userEmail === getAdminEmail(planConfig);
   const requestedModel = String(payload?.model || '');
+  const requestedMode = String(payload?.mode || (requestedModel === 'deepseek-v4-pro' ? 'expert' : 'fast')).toLowerCase();
   const remainingUnits = getRemainingUsageUnits(userProfile);
   if (!isAdmin && remainingUnits <= 0) {
     return jsonResponse({ error: { message: 'Usage limit reached' } }, 403);
@@ -132,6 +133,7 @@ export default async function handler(req) {
   };
   delete upstreamPayload.userUid;
   delete upstreamPayload.userEmail;
+  delete upstreamPayload.mode;
 
   let upstream;
   try {
@@ -185,7 +187,11 @@ export default async function handler(req) {
     } finally {
       try {
         if (!streamFailed && upstream.ok) {
-          const usageDelta = calculateUsageUnitsFromSse(rawSseText, requestedModel);
+          const usageDelta = calculateUsageUnitsFromSse(rawSseText, {
+            modelId: requestedModel,
+            planId: userProfile.planId,
+            mode: requestedMode,
+          });
           await consumeUsageUnits(userUid, usageDelta, userProfile, planConfig);
         }
       } catch (error) {
@@ -340,7 +346,12 @@ function getStoredPlanId(fields = {}, planConfig = DEFAULT_PLAN_CONFIG) {
 }
 
 function getUsageResetKey() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function getFreeUsageResetField(fields = {}) {
@@ -626,7 +637,11 @@ function toSafeNumber(value, fallback) {
   return Number.isFinite(num) ? num : fallback;
 }
 
-function calculateUsageUnitsFromSse(chunkText, modelId = '') {
+function isDiscountedPlan(planId = '') {
+  return ['pro', 'ultra'].includes(String(planId || '').toLowerCase());
+}
+
+function calculateUsageUnitsFromSse(chunkText, { modelId = '', planId = '', mode = 'fast' } = {}) {
   let contentText = '';
   let reasoningText = '';
   let usage = null;
@@ -655,16 +670,11 @@ function calculateUsageUnitsFromSse(chunkText, modelId = '') {
   const totalTokens = Number(usage?.total_tokens || (promptTokens + completionTokens));
   const reasoningTokens = Math.max(0, Math.ceil(reasoningText.length / 4));
   const visibleTokens = Math.max(0, Math.ceil(contentText.length / 4));
-  let billableTokens = totalTokens > 0 ? totalTokens : Math.max(1, visibleTokens + reasoningTokens);
-
-  if (isExpertModel(modelId)) {
-    billableTokens += reasoningTokens;
-  }
-
-  const weightedUnits = isExpertModel(modelId)
-    ? billableTokens * 10
-    : billableTokens;
-
+  const discountedPromptTokens = isDiscountedPlan(planId) ? Math.floor(promptTokens / 2) : promptTokens;
+  const baseUnits = (promptTokens || completionTokens)
+    ? (discountedPromptTokens + completionTokens)
+    : (totalTokens > 0 ? totalTokens : Math.max(1, visibleTokens + reasoningTokens));
+  const weightedUnits = mode === 'expert' ? baseUnits * 10 : baseUnits;
   return Math.max(1, Math.ceil(weightedUnits));
 }
 
