@@ -13,7 +13,7 @@ const PLAN_LIMITS = {
   starter: 2000000,
   pro: 10000000,
   ultra: 35000000,
-  free: 10000,
+  free: 6000,
   god_mode: 999999999,
 };
 

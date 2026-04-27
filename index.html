@@ -5006,7 +5006,7 @@ const DEFAULT_PLAN_CONFIG = {
     free: {
       label: 'Free',
       priceUsd: 0,
-      tokenLimit: 10000,
+      tokenLimit: 6000,
       showProgressBar: true,
     },
     starter: {
@@ -5128,7 +5128,7 @@ let state = {
     role: 'user',
     planId: 'free',
     tokensUsed: 0,
-    tokenLimit: 10000,
+    tokenLimit: 6000,
   },
 };
 let planConfig = JSON.parse(JSON.stringify(DEFAULT_PLAN_CONFIG));
@@ -5595,7 +5595,7 @@ function getUsageRole(userDoc = {}) {
 }
 
 const LEGACY_PLAN_LIMITS = {
-  free: [5000],
+  free: [5000, 10000],
   starter: [1000000],
   pro: [5000000],
   ultra: [25000000],
@@ -5628,6 +5628,12 @@ function canAccessExpertMode(profile = state.usageProfile || {}) {
   const role = profile.role || 'user';
   const planId = profile.planId || getDefaultPlanId();
   return role === 'admin' || ['pro', 'ultra', 'god_mode'].includes(planId);
+}
+
+function canAccessSearch(profile = state.usageProfile || {}) {
+  const role = profile.role || 'user';
+  const planId = profile.planId || getDefaultPlanId();
+  return role === 'admin' || ['starter', 'pro', 'ultra', 'god_mode'].includes(planId);
 }
 
 function isExpertModel(modelId = '') {
@@ -5743,6 +5749,19 @@ function updateModeUI() {
   if (usageNoteEl) {
     usageNoteEl.textContent = 'Expert Mode uses 10x more Compute Units per message.';
   }
+}
+
+function updateSearchToggleUI() {
+  const searchToggle = document.getElementById('search-toggle');
+  if (!searchToggle) return;
+  const searchAllowed = canAccessSearch(state.usageProfile);
+  if (!searchAllowed && state.searchEnabled) {
+    state.searchEnabled = false;
+    saveState();
+  }
+  searchToggle.checked = !!state.searchEnabled && searchAllowed;
+  searchToggle.disabled = !searchAllowed;
+  searchToggle.title = searchAllowed ? 'Web search' : 'Web search requires Starter or higher.';
 }
 
 function updatePricingModalState(activePlanId = 'free', role = 'user') {
@@ -8963,6 +8982,7 @@ async function renderUsageStats() {
     updateSubscriptionButton(state.usageProfile);
     updatePricingModalState(state.usageProfile.planId, state.usageProfile.role);
     updateModeUI();
+    updateSearchToggleUI();
     return;
   }
 
@@ -8995,6 +9015,7 @@ async function renderUsageStats() {
       updateSubscriptionButton(state.usageProfile);
       updatePricingModalState(planId, role);
       updateModeUI();
+      updateSearchToggleUI();
       return;
     }
 
@@ -9010,6 +9031,7 @@ async function renderUsageStats() {
     updateSubscriptionButton(state.usageProfile);
     updatePricingModalState(planId, role);
     updateModeUI();
+    updateSearchToggleUI();
   } catch (err) {
     if (planPercentEl) planPercentEl.textContent = '--';
     usageBarEl.hidden = !getPlanDefinition(getDefaultPlanId()).showProgressBar;
@@ -9018,6 +9040,7 @@ async function renderUsageStats() {
     if (balanceEl) balanceEl.textContent = '0 top-up units available';
     updateSubscriptionButton(state.usageProfile);
     updateModeUI();
+    updateSearchToggleUI();
   }
 }
 
@@ -9532,6 +9555,13 @@ function initEventListeners() {
   document.getElementById('active-gem-trigger').addEventListener('click', openGemsManager);
 
   document.getElementById('search-toggle').addEventListener('change', (e) => {
+    if (!canAccessSearch(state.usageProfile)) {
+      e.target.checked = false;
+      state.searchEnabled = false;
+      saveState();
+      showToast('Web search requires Starter or higher');
+      return;
+    }
     state.searchEnabled = e.target.checked;
     saveState();
     showToast(state.searchEnabled ? 'Search enabled' : 'Search disabled');
@@ -10024,11 +10054,12 @@ async function init() {
   applyColorMode(state.colorMode, false);
 
   // Set thinking toggle
-  document.getElementById('search-toggle').checked = state.searchEnabled;
+  updateSearchToggleUI();
   updateLocalImageModelHint();
 
   // Set mode tabs
   updateModeUI();
+  updateSearchToggleUI();
 
   // Update API status
   updateApiStatus();

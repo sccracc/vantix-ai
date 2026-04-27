@@ -10,7 +10,7 @@ const DEFAULT_PLAN_CONFIG = {
     free: {
       label: 'Free',
       priceUsd: 0,
-      tokenLimit: 10000,
+      tokenLimit: 6000,
       showProgressBar: true,
     },
     starter: {
@@ -364,7 +364,7 @@ function shouldResetFreeUsage(fields = {}) {
 }
 
 const LEGACY_PLAN_LIMITS = {
-  free: [5000],
+  free: [5000, 10000],
   starter: [1000000],
   pro: [5000000],
   ultra: [25000000],
