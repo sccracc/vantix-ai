@@ -4782,6 +4782,7 @@ const PERSONA_META = {
 let attachedFiles = []; // {name, content, type}
 let currentController = null; // AbortController for streaming
 let isStreaming = false;
+let pendingRealtimeRender = false;
 let speechRecognition = null;
 let isRecording = false;
 let activeSpeechState = { convId: null, msgIdx: null };
@@ -5082,6 +5083,10 @@ function subscribeToConversationList() {
     }
 
     saveState();
+    if (isStreaming) {
+      pendingRealtimeRender = true;
+      return;
+    }
     renderChatList();
     renderMessages('force');
     updateChatTitle();
@@ -6552,7 +6557,7 @@ function openGemsManager() {
 // ============================================================
 // RENDER FUNCTIONS
 // ============================================================
-function renderChatList() {
+function renderChatListOld() {
   const container = document.getElementById('chat-list');
   const convs = Object.values(state.conversations).sort((a, b) => b.updatedAt - a.updatedAt);
 
@@ -6594,7 +6599,7 @@ function renderChatList() {
   });
 }
 
-function renderMessages(scrollMode = 'if-pinned') {
+function renderMessagesOld(scrollMode = 'if-pinned') {
   const container = document.getElementById('messages');
   const conv = getCurrentConv();
 
@@ -6624,7 +6629,7 @@ function renderMessages(scrollMode = 'if-pinned') {
   else if (scrollMode === 'if-pinned') scrollToBottomIfPinned();
 }
 
-function createMessageElement(msg, idx) {
+function createMessageElementOld(msg, idx) {
   const wrapper = document.createElement('div');
   wrapper.className = `message ${msg.role}`;
   wrapper.dataset.idx = idx;
@@ -7218,6 +7223,9 @@ async function sendMessage() {
   conv.updatedAt = Date.now();
   persistConversationToFirestore(conv);
 
+  isStreaming = true;
+  currentController = new AbortController();
+
   // Clear input
   textarea.value = '';
   autoResize();
@@ -7227,11 +7235,9 @@ async function sendMessage() {
 
   renderMessages('force');
 
-  const typingEl = addTypingIndicator();
+  const typingEl = document.getElementById('typing-indicator') || addTypingIndicator();
 
   // Stream response
-  isStreaming = true;
-  currentController = new AbortController();
   updateStreamingUI(true);
 
   try {
@@ -7259,22 +7265,15 @@ async function sendMessage() {
     isStreaming = false;
     currentController = null;
     updateStreamingUI(false);
+    flushPendingRealtimeRender('force');
   }
 }
 
 function addTypingIndicator() {
   const container = document.getElementById('messages');
-  const el = document.createElement('div');
-  el.className = 'typing-indicator message assistant';
-  el.id = 'typing-indicator';
-  el.innerHTML = `
-    <div class="avatar ai-avatar">D</div>
-    <div class="typing-dots">
-      <div class="typing-dot"></div>
-      <div class="typing-dot"></div>
-      <div class="typing-dot"></div>
-    </div>
-  `;
+  const existing = container.querySelector('#typing-indicator');
+  if (existing) return existing;
+  const el = createTypingIndicatorElement();
   container.appendChild(el);
   scrollToBottomIfPinned();
   return el;
@@ -7589,13 +7588,13 @@ async function continueAssistantResponse(assistantMsgIndex) {
     historyText: '',
   });
   conv.updatedAt = Date.now();
+  isStreaming = true;
+  currentController = new AbortController();
   saveState();
   persistConversationToFirestore(conv);
   renderMessages('force');
 
-  const typingEl = addTypingIndicator();
-  isStreaming = true;
-  currentController = new AbortController();
+  const typingEl = document.getElementById('typing-indicator') || addTypingIndicator();
   updateStreamingUI(true);
   try {
     await streamResponse(conv, typingEl);
@@ -7618,6 +7617,7 @@ async function continueAssistantResponse(assistantMsgIndex) {
     isStreaming = false;
     currentController = null;
     updateStreamingUI(false);
+    flushPendingRealtimeRender('force');
   }
 }
 
@@ -7628,13 +7628,13 @@ async function regenerateMessage(msgIdx) {
   // Remove all messages from msgIdx onwards
   conv.messages = conv.messages.slice(0, msgIdx);
   conv.updatedAt = Date.now();
+  isStreaming = true;
+  currentController = new AbortController();
   saveState();
   persistConversationToFirestore(conv);
   renderMessages('force');
 
-  const typingEl = addTypingIndicator();
-  isStreaming = true;
-  currentController = new AbortController();
+  const typingEl = document.getElementById('typing-indicator') || addTypingIndicator();
   updateStreamingUI(true);
 
   try {
@@ -7646,6 +7646,7 @@ async function regenerateMessage(msgIdx) {
     isStreaming = false;
     currentController = null;
     updateStreamingUI(false);
+    flushPendingRealtimeRender('force');
   }
 }
 
@@ -9006,6 +9007,14 @@ function closeMobileSidebar() {
   document.getElementById('sidebar-overlay').classList.remove('mobile-open');
 }
 
+function flushPendingRealtimeRender(scrollMode = 'force') {
+  if (!pendingRealtimeRender || isStreaming) return;
+  pendingRealtimeRender = false;
+  renderChatList();
+  renderMessages(scrollMode);
+  updateChatTitle();
+}
+
 function renderChatList() {
   const container = document.getElementById('chat-list');
   const convs = Object.values(state.conversations).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -9068,6 +9077,10 @@ function renderMessages(scrollMode = 'if-pinned') {
   conv.messages.forEach((msg, idx) => {
     container.appendChild(createMessageElement(msg, idx));
   });
+
+  if (isStreaming && !container.querySelector('#typing-indicator')) {
+    container.appendChild(createTypingIndicatorElement());
+  }
 
   refreshSpeakButtons();
   requestAnimationFrame(() => {
@@ -9239,6 +9252,25 @@ function createMessageElement(msg, idx) {
   wrapper.appendChild(avatar);
   wrapper.appendChild(body);
   return wrapper;
+}
+
+function createTypingIndicatorElement() {
+  const identity = getAssistantIdentity();
+  const el = document.createElement('div');
+  el.className = 'typing-indicator message assistant';
+  el.id = 'typing-indicator';
+  el.innerHTML = `
+    <div class="avatar ai-avatar">${escapeHtml(identity.avatar)}</div>
+    <div class="message-body">
+      <div class="message-meta">${escapeHtml(identity.label)}</div>
+      <div class="typing-dots">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+    </div>
+  `;
+  return el;
 }
 
 function showToast(message, duration = 2500) {
