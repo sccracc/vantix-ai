@@ -10,7 +10,7 @@ const DEFAULT_PLAN_CONFIG = {
     free: {
       label: 'Free',
       priceUsd: 0,
-      tokenLimit: 5000,
+      tokenLimit: 10000,
       showProgressBar: true,
     },
     starter: {
@@ -191,6 +191,7 @@ export default async function handler(req) {
             modelId: requestedModel,
             planId: userProfile.planId,
             mode: requestedMode,
+            nonBillablePromptTokens: estimateNonBillablePromptTokens(payload.messages),
           });
           await consumeUsageUnits(userUid, usageDelta, userProfile, planConfig);
         }
@@ -363,7 +364,7 @@ function shouldResetFreeUsage(fields = {}) {
 }
 
 const LEGACY_PLAN_LIMITS = {
-  free: [10000],
+  free: [5000],
   starter: [1000000],
   pro: [5000000],
   ultra: [25000000],
@@ -641,7 +642,25 @@ function isDiscountedPlan(planId = '') {
   return ['pro', 'ultra'].includes(String(planId || '').toLowerCase());
 }
 
-function calculateUsageUnitsFromSse(chunkText, { modelId = '', planId = '', mode = 'fast' } = {}) {
+function estimateTokenCount(value) {
+  if (typeof value === 'string') return Math.max(0, Math.ceil(value.length / 4));
+  if (Array.isArray(value)) {
+    return value.reduce((sum, item) => sum + estimateTokenCount(item?.text || item?.content || ''), 0);
+  }
+  if (value && typeof value === 'object') {
+    return estimateTokenCount(value.text || value.content || '');
+  }
+  return 0;
+}
+
+function estimateNonBillablePromptTokens(messages = []) {
+  return (Array.isArray(messages) ? messages : []).reduce((sum, message) => {
+    if (String(message?.role || '') !== 'system') return sum;
+    return sum + estimateTokenCount(message?.content || '');
+  }, 0);
+}
+
+function calculateUsageUnitsFromSse(chunkText, { modelId = '', planId = '', mode = 'fast', nonBillablePromptTokens = 0 } = {}) {
   let contentText = '';
   let reasoningText = '';
   let usage = null;
@@ -665,7 +684,7 @@ function calculateUsageUnitsFromSse(chunkText, { modelId = '', planId = '', mode
     }
   }
 
-  const promptTokens = Number(usage?.prompt_tokens || 0);
+  const promptTokens = Math.max(0, Number(usage?.prompt_tokens || 0) - Math.max(0, Math.ceil(Number(nonBillablePromptTokens) || 0)));
   const completionTokens = Number(usage?.completion_tokens || 0);
   const totalTokens = Number(usage?.total_tokens || (promptTokens + completionTokens));
   const reasoningTokens = Math.max(0, Math.ceil(reasoningText.length / 4));

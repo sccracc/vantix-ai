@@ -5006,7 +5006,7 @@ const DEFAULT_PLAN_CONFIG = {
     free: {
       label: 'Free',
       priceUsd: 0,
-      tokenLimit: 5000,
+      tokenLimit: 10000,
       showProgressBar: true,
     },
     starter: {
@@ -5128,7 +5128,7 @@ let state = {
     role: 'user',
     planId: 'free',
     tokensUsed: 0,
-    tokenLimit: 5000,
+    tokenLimit: 10000,
   },
 };
 let planConfig = JSON.parse(JSON.stringify(DEFAULT_PLAN_CONFIG));
@@ -5595,7 +5595,7 @@ function getUsageRole(userDoc = {}) {
 }
 
 const LEGACY_PLAN_LIMITS = {
-  free: [10000],
+  free: [5000],
   starter: [1000000],
   pro: [5000000],
   ultra: [25000000],
@@ -5659,9 +5659,27 @@ function isDiscountedPlan(planId = '') {
   return ['pro', 'ultra'].includes(String(planId || '').toLowerCase());
 }
 
-function calculateUsageUnitsFromUsage(usage, modelId = getApiModelId(), planId = state.usageProfile?.planId || getDefaultPlanId(), mode = state.mode) {
+function estimateTokenCount(value) {
+  if (typeof value === 'string') return Math.max(0, Math.ceil(value.length / 4));
+  if (Array.isArray(value)) {
+    return value.reduce((sum, item) => sum + estimateTokenCount(item?.text || item?.content || ''), 0);
+  }
+  if (value && typeof value === 'object') {
+    return estimateTokenCount(value.text || value.content || '');
+  }
+  return 0;
+}
+
+function estimateNonBillablePromptTokens(messages = []) {
+  return (Array.isArray(messages) ? messages : []).reduce((sum, message) => {
+    if (String(message?.role || '') !== 'system') return sum;
+    return sum + estimateTokenCount(message?.content || '');
+  }, 0);
+}
+
+function calculateUsageUnitsFromUsage(usage, modelId = getApiModelId(), planId = state.usageProfile?.planId || getDefaultPlanId(), mode = state.mode, nonBillablePromptTokens = 0) {
   if (!usage) return 0;
-  const promptTokens = Number(usage.prompt_tokens || 0);
+  const promptTokens = Math.max(0, Number(usage.prompt_tokens || 0) - Math.max(0, Math.ceil(Number(nonBillablePromptTokens) || 0)));
   const completionTokens = Number(usage.completion_tokens || 0);
   const fallbackTotal = Number(usage.total_tokens || (promptTokens + completionTokens));
   const discountedPromptTokens = isDiscountedPlan(planId) ? Math.floor(promptTokens / 2) : promptTokens;
@@ -5672,9 +5690,9 @@ function calculateUsageUnitsFromUsage(usage, modelId = getApiModelId(), planId =
   return Math.max(1, Math.ceil(mode === 'expert' ? baseUnits * 10 : baseUnits));
 }
 
-function applyOptimisticUsageDelta(usage, modelId = getApiModelId(), mode = state.mode) {
+function applyOptimisticUsageDelta(usage, modelId = getApiModelId(), mode = state.mode, nonBillablePromptTokens = 0) {
   if (!state.usageProfile || state.usageProfile.role === 'admin') return;
-  const delta = calculateUsageUnitsFromUsage(usage, modelId, state.usageProfile.planId, mode);
+  const delta = calculateUsageUnitsFromUsage(usage, modelId, state.usageProfile.planId, mode, nonBillablePromptTokens);
   if (!delta) return;
   state.usageProfile.tokensUsed = Number(state.usageProfile.tokensUsed || 0) + delta;
 }
@@ -7920,6 +7938,7 @@ async function streamResponse(conv, typingEl) {
     stream: true,
     stream_options: { include_usage: true },
   };
+  const nonBillablePromptTokens = estimateNonBillablePromptTokens(body.messages);
 
   const response = await postChatRequest(body, currentController.signal);
 
@@ -8074,7 +8093,7 @@ async function streamResponse(conv, typingEl) {
   persistConversationToFirestore(conv);
   void maybeSummarizeConversationInBackground(conv);
   if (lastUsage) {
-    applyOptimisticUsageDelta(lastUsage, body.model, body.mode);
+    applyOptimisticUsageDelta(lastUsage, body.model, body.mode, nonBillablePromptTokens);
     await renderUsageStats();
     queueUsageStatsRefresh();
   }
