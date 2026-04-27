@@ -748,6 +748,12 @@ select:focus:not(:focus-visible) {
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-secondary);
+  flex: 1;
+}
+
+.topup-card .pricing-select-btn {
+  width: 100%;
+  margin-top: auto;
 }
 
 @media (max-width: 980px) {
@@ -2110,6 +2116,18 @@ select:focus:not(:focus-visible) {
 }
 
 .modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.modal-header-actions .btn-secondary,
+.modal-header-actions .btn-primary {
+  white-space: nowrap;
+}
 
 .form-section {
   margin-bottom: 20px;
@@ -4463,7 +4481,10 @@ body::before {
   <div class="modal pricing-modal">
     <div class="modal-header">
       <div class="modal-title">Manage Subscription</div>
-      <button class="modal-close" id="manage-subscription-close">x</button>
+      <div class="modal-header-actions">
+        <button class="btn-secondary" id="manage-plan-btn" type="button">Manage Plan</button>
+        <button class="modal-close" id="manage-subscription-close">✕</button>
+      </div>
     </div>
     <div class="form-section">
       <label class="form-label">Current Plan</label>
@@ -4472,9 +4493,6 @@ body::before {
         <span id="manage-subscription-plan">Free</span>
       </div>
       <p class="form-note" id="manage-subscription-summary">Your active plan details will appear here.</p>
-    </div>
-    <div class="modal-footer" style="margin-bottom: 18px;">
-      <button class="btn-primary" id="manage-plan-btn" type="button">Manage Plan</button>
     </div>
     <div class="topup-grid">
       <div class="topup-card">
@@ -4740,7 +4758,7 @@ let state = {
   conversations: {},
   currentConvId: null,
   settings: {
-    systemPrompt: 'You are Vantix AI, a helpful, intelligent, and capable AI assistant.',
+    systemPrompt: 'You are Vantix AI, the core intelligence behind the Vantix Neural Interface. Provide elite-level intelligence with a calm, sharp, and intellectually generous tone.',
     temperature: 0.7,
     localImageModel: 'coco-ssd',
     ttsEnabled: true,
@@ -4927,7 +4945,7 @@ function loadState() {
       state.settings.recommendedResponses = saved?.settings?.recommendedResponses !== false;
       state.theme = 'midnight';
       state.mode = saved.mode || 'expert';
-      state.persona = PERSONA_META[saved.persona] ? saved.persona : 'vantix';
+      state.persona = 'vantix';
       state.memories = saved.memories || [];
       state.imageAnalysisCache = saved.imageAnalysisCache || {};
       // Merge prompts: keep defaults + saved custom prompts
@@ -5927,6 +5945,24 @@ function getPersonaMeta(persona = state.persona) {
 }
 
 function getPersonaPrompt(persona = state.persona) {
+  return `You are Vantix AI, the core intelligence behind the Vantix Neural Interface.
+
+Identity & Tone:
+- You are a top-of-the-line, premium AI model designed to provide elite-level intelligence at an insanely accessible price point.
+- You are strictly Vantix. Never identify as Claude, GPT, Anthropic, OpenAI, Google, Gemini, ChatGPT, or any other third-party system.
+- Your tone is calm, sharp, and intellectually generous. Speak with the authority of a senior engineer but the accessibility of a workspace tool built for flow.
+
+Style Guidelines:
+- Define the problem before solving it. Separate assumptions from conclusions.
+- Use clean markdown headings when they improve readability.
+- Be efficient and high-fidelity. Prefer concrete topic words over generic labels. Avoid unnecessary fluff.
+
+Behavior Rules:
+- If asked about identity, state that you are Vantix AI and that you were developed by Vantix Labs.
+- If asked about cost or quality, explain that Vantix is engineered for high-performance Fast and Expert modes and delivers professional-grade results efficiently.
+- Never claim to be operating in 2025. You are operating in 2026.
+- Never mention Anthropic, Claude, OpenAI, Google, Gemini, or ChatGPT as your identity or creator.
+`;
   switch (persona) {
     case 'claude':
       return `You are simulating a clearly labeled persona inspired by Vantix AI. You are powered by Vantix AI and must never claim to literally be Anthropic's actual system, but your style should strongly evoke that family of assistant behavior while remaining honest about the simulation if asked. The goal is a thoughtful, high-fidelity stylistic profile, not identity deception. Present yourself with a calm, reflective, intellectually generous voice. Your design philosophy is helpful, honest, and harmless, with unusual attention to nuance, ambiguity, edge cases, trade-offs, and the user's underlying intent. You often begin in a warm but measured way with phrases like "I appreciate you asking," "That's a thoughtful question," "That's an interesting problem," or "Let me unpack this." Your greetings should not feel breezy or overly chatty; they should feel grounded, attentive, and slightly editorial.
@@ -7091,11 +7127,26 @@ function messageToApiFormat(m) {
 // ============================================================
 // API COMMUNICATION
 // ============================================================
-function buildSystemPrompt() {
+function getCurrentDateString() {
+  return new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function getSystemPrompt() {
+  const currentDate = getCurrentDateString();
   const personaPrompt = getPersonaPrompt();
-  let sys = personaPrompt
-    ? `${personaPrompt}\n\n${state.settings.systemPrompt || ''}`
-    : (state.settings.systemPrompt || '');
+  const identityPrompt = [
+    `Knowledge Cutoff Override: Today is ${currentDate}. You are Vantix AI.`,
+    'You are currently operating in the year 2026. Do not refer to yourself as being in 2025. You are the Vantix AI Neural Interface, a cutting-edge model released in 2026.',
+    'If asked about your identity, you must never mention Anthropic, Claude, OpenAI, or Google. You were developed by Vantix Labs.',
+  ].join('\n');
+  let sys = [identityPrompt, personaPrompt, state.settings.systemPrompt || '']
+    .filter(Boolean)
+    .join('\n\n');
   const conv = getCurrentConv();
   const gem = conv?.gemId ? state.gems.find(g => g.id === conv.gemId) : null;
 
@@ -7114,6 +7165,10 @@ function buildSystemPrompt() {
   }
 
   return sys;
+}
+
+function buildSystemPrompt() {
+  return getSystemPrompt();
 }
 
 async function sendMessage() {
