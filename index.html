@@ -4863,16 +4863,53 @@ function getLegacyLocalConversationState() {
   };
 }
 
+function normalizeConversationMap(rawConversations = {}) {
+  const conversations = {};
+  Object.entries(rawConversations || {}).forEach(([id, conv]) => {
+    const normalized = normalizeConversation({ id, ...conv });
+    if (normalized) conversations[normalized.id] = normalized;
+  });
+  return conversations;
+}
+
+function buildConversationSnapshot() {
+  const conversations = {};
+  Object.values(state.conversations || {}).forEach(conv => {
+    const normalized = normalizeConversation(conv);
+    if (normalized) conversations[normalized.id] = normalized;
+  });
+  return {
+    conversations,
+    currentConvId: state.currentConvId,
+    updatedAt: Date.now(),
+  };
+}
+
+function applyConversationSnapshot(snapshot = {}) {
+  state.conversations = normalizeConversationMap(snapshot.conversations || {});
+  state.currentConvId = snapshot.currentConvId || Object.keys(state.conversations)[0] || null;
+}
+
+function getCurrentUserCacheKey() {
+  return currentUser?.uid ? String(currentUser.uid) : '';
+}
+
+function loadConversationSnapshotForUser(userId = '') {
+  if (!userId) return null;
+  const saved = readRawLocalState();
+  return saved?.cloudConversationCacheByUid?.[userId] || null;
+}
+
+function loadGuestConversationSnapshot() {
+  const saved = readRawLocalState();
+  return saved?.guestConversationCache || null;
+}
+
 function loadState() {
   try {
     const saved = readRawLocalState();
     if (saved) {
-      const savedConversations = {};
-      Object.entries(saved.conversations || {}).forEach(([id, conv]) => {
-        const normalized = normalizeConversation({ id, ...conv });
-        if (normalized) savedConversations[normalized.id] = normalized;
-      });
-      state.conversations = savedConversations;
+      state.conversations = normalizeConversationMap(saved.conversations || {});
       // Merge carefully
       state.currentConvId = saved.currentConvId || null;
       state.settings = { ...state.settings, ...saved.settings };
@@ -4909,14 +4946,21 @@ function loadState() {
 
 function saveState() {
   try {
-    const conversations = {};
-    Object.values(state.conversations || {}).forEach(conv => {
-      const normalized = normalizeConversation(conv);
-      if (normalized) conversations[normalized.id] = normalized;
-    });
+    const snapshot = buildConversationSnapshot();
+    const existing = readRawLocalState() || {};
+    const cloudConversationCacheByUid = { ...(existing.cloudConversationCacheByUid || {}) };
+    const userId = getCurrentUserCacheKey();
+    if (userId) {
+      cloudConversationCacheByUid[userId] = {
+        ...snapshot,
+        email: currentUser?.email || '',
+      };
+    }
+
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      conversations,
-      currentConvId: state.currentConvId,
+      ...existing,
+      conversations: snapshot.conversations,
+      currentConvId: snapshot.currentConvId,
       settings: state.settings,
       theme: state.theme,
       mode: state.mode,
@@ -4931,6 +4975,8 @@ function saveState() {
       sessionStats: state.sessionStats,
       pendingBranchPoint: state.pendingBranchPoint,
       persona: state.persona,
+      guestConversationCache: userId ? (existing.guestConversationCache || null) : snapshot,
+      cloudConversationCacheByUid,
     }));
   } catch(e) { console.warn('State save error:', e); }
 }
@@ -5382,6 +5428,14 @@ async function initFirebase() {
       updateApiStatus();
 
       if (currentUser && firebaseServices.db) {
+        const localUserSnapshot = loadConversationSnapshotForUser(currentUser.uid);
+        if (localUserSnapshot) {
+          applyConversationSnapshot(localUserSnapshot);
+          renderChatList();
+          renderMessages('force');
+          updateChatTitle();
+        }
+
         try {
           const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
           const userSnap = firebaseServices.getDoc ? await firebaseServices.getDoc(userRef) : null;
@@ -5423,8 +5477,13 @@ async function initFirebase() {
           showToast(err?.message || 'Failed to confirm checkout');
         }
       } else {
-        state.conversations = {};
-        state.currentConvId = null;
+        const guestSnapshot = loadGuestConversationSnapshot();
+        if (guestSnapshot) {
+          applyConversationSnapshot(guestSnapshot);
+        } else {
+          state.conversations = {};
+          state.currentConvId = null;
+        }
         saveState();
         renderChatList();
         renderMessages('force');
