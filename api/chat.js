@@ -16,19 +16,19 @@ const DEFAULT_PLAN_CONFIG = {
     starter: {
       label: 'Starter',
       priceUsd: 10,
-      tokenLimit: 1000000,
+      tokenLimit: 2000000,
       showProgressBar: true,
     },
     pro: {
       label: 'Pro',
       priceUsd: 20,
-      tokenLimit: 5000000,
+      tokenLimit: 10000000,
       showProgressBar: true,
     },
     ultra: {
       label: 'Ultra',
       priceUsd: 50,
-      tokenLimit: 25000000,
+      tokenLimit: 35000000,
       showProgressBar: true,
     },
     god_mode: {

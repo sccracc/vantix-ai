@@ -10,9 +10,9 @@ import {
 export const config = { runtime: 'edge' };
 
 const PLAN_LIMITS = {
-  starter: 1000000,
-  pro: 5000000,
-  ultra: 25000000,
+  starter: 2000000,
+  pro: 10000000,
+  ultra: 35000000,
   free: 10000,
   god_mode: 999999999,
 };
