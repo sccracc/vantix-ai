@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Vantix AI workspace - themes, memory, streaming, and prompt tools. Runs locally in your browser.">
 <meta name="theme-color" content="#080b14">
+<link rel="icon" type="image/png" href="Vantix-Logo.png">
+<link rel="apple-touch-icon" href="Vantix-Logo.png">
 <title>Vantix AI - Neural Interface</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2651,6 +2653,85 @@ body::before {
   opacity: 0.08;
 }
 
+[data-color-mode="light"] #sidebar {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,250,255,0.88)),
+    rgba(255,255,255,0.9);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+
+[data-color-mode="light"] .sidebar-header {
+  background: linear-gradient(180deg, rgba(124,140,255,0.06), rgba(255,255,255,0));
+}
+
+[data-color-mode="light"] .auth-user,
+[data-color-mode="light"] .usage-card {
+  background: rgba(245, 248, 255, 0.9);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-color-mode="light"] .chat-item:hover,
+[data-color-mode="light"] .chat-item.active {
+  background: rgba(124, 140, 255, 0.08);
+}
+
+[data-color-mode="light"] .suggestion-card,
+[data-color-mode="light"] .modal,
+[data-color-mode="light"] #input-area,
+[data-color-mode="light"] .message.assistant .message-content {
+  backdrop-filter: none;
+}
+
+[data-color-mode="light"] .suggestion-card {
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+[data-color-mode="light"] .suggestion-card:hover {
+  background: rgba(255,255,255,1);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.10);
+}
+
+[data-color-mode="light"] .message.assistant .message-content {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+[data-color-mode="light"] .message.user .message-content,
+[data-color-mode="light"] .avatar.user-avatar {
+  color: #ffffff;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent-1) 22%, transparent);
+}
+
+[data-color-mode="light"] #input-area {
+  background: rgba(255,255,255,0.92);
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.10);
+}
+
+[data-color-mode="light"] .modal {
+  background: rgba(255,255,255,0.98);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.18);
+}
+
+[data-color-mode="light"] .modal-overlay {
+  background: rgba(241, 245, 255, 0.72);
+}
+
+[data-color-mode="light"] .btn-secondary,
+[data-color-mode="light"] .sidebar-btn,
+[data-color-mode="light"] .toolbar-btn,
+[data-color-mode="light"] .form-input {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+[data-color-mode="light"] .welcome-title {
+  background: linear-gradient(135deg, #3557d6 0%, #5b6bff 45%, #1694d8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
 #sidebar {
   width: var(--sidebar-width);
   height: calc(100vh - 36px);
@@ -5002,25 +5083,30 @@ function getCurrentUserCacheKey() {
   return currentUser?.uid ? String(currentUser.uid) : '';
 }
 
-function loadConversationSnapshotForUser(userId = '') {
-  if (!userId) return null;
-  const saved = readRawLocalState();
-  return saved?.cloudConversationCacheByUid?.[userId] || null;
+function clearInMemoryConversations() {
+  state.conversations = {};
+  state.currentConvId = null;
 }
 
-function loadGuestConversationSnapshot() {
-  const saved = readRawLocalState();
-  return saved?.guestConversationCache || null;
+function stripLocalConversationState(saved = {}) {
+  const next = { ...(saved || {}) };
+  delete next.conversations;
+  delete next.currentConvId;
+  delete next.guestConversationCache;
+  delete next.cloudConversationCacheByUid;
+  return next;
 }
 
 function loadState() {
   try {
     const saved = readRawLocalState();
     if (saved) {
-      state.conversations = normalizeConversationMap(saved.conversations || {});
-      // Merge carefully
-      state.currentConvId = saved.currentConvId || null;
-      state.settings = { ...state.settings, ...saved.settings };
+      const sanitized = stripLocalConversationState(saved);
+      if (JSON.stringify(saved) !== JSON.stringify(sanitized)) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+      }
+      clearInMemoryConversations();
+      state.settings = { ...state.settings, ...sanitized.settings };
       delete state.settings.maxTokens;
       delete state.settings.apiKey;
       if (!LOCAL_IMAGE_MODELS[state.settings.localImageModel]) {
@@ -5028,24 +5114,24 @@ function loadState() {
       }
       state.settings.ttsEnabled = true;
       state.settings.temperature = 0.7;
-      state.settings.recommendedResponses = saved?.settings?.recommendedResponses !== false;
-      state.theme = typeof saved.theme === 'string' ? saved.theme : 'midnight';
-      state.colorMode = saved?.colorMode === 'light' ? 'light' : 'dark';
-      state.mode = saved.mode || 'expert';
+      state.settings.recommendedResponses = sanitized?.settings?.recommendedResponses !== false;
+      state.theme = typeof sanitized.theme === 'string' ? sanitized.theme : 'midnight';
+      state.colorMode = sanitized?.colorMode === 'light' ? 'light' : 'dark';
+      state.mode = sanitized.mode || 'expert';
       state.persona = 'vantix';
-      state.memories = saved.memories || [];
-      state.imageAnalysisCache = saved.imageAnalysisCache || {};
+      state.memories = sanitized.memories || [];
+      state.imageAnalysisCache = sanitized.imageAnalysisCache || {};
       // Merge prompts: keep defaults + saved custom prompts
-      const customPrompts = (saved.prompts || []).filter(p => p.custom);
+      const customPrompts = (sanitized.prompts || []).filter(p => p.custom);
       state.prompts = [...DEFAULT_PROMPTS, ...customPrompts];
-      const customGems = (saved.gems || []).filter(g => g.custom);
+      const customGems = (sanitized.gems || []).filter(g => g.custom);
       state.gems = [...DEFAULT_GEMS, ...customGems];
-      state.activeGemId = saved.activeGemId || '';
+      state.activeGemId = sanitized.activeGemId || '';
       state.thinkingEnabled = true;
-      state.searchEnabled = !!saved.searchEnabled;
-      state.sessionUsage = { ...state.sessionUsage, ...(saved.sessionUsage || {}) };
-      state.sessionStats = Array.isArray(saved.sessionStats) ? saved.sessionStats.slice(-50) : [];
-      state.pendingBranchPoint = saved.pendingBranchPoint || null;
+      state.searchEnabled = !!sanitized.searchEnabled;
+      state.sessionUsage = { ...state.sessionUsage, ...(sanitized.sessionUsage || {}) };
+      state.sessionStats = Array.isArray(sanitized.sessionStats) ? sanitized.sessionStats.slice(-50) : [];
+      state.pendingBranchPoint = sanitized.pendingBranchPoint || null;
       if (state.activeGemId && !state.gems.some(g => g.id === state.activeGemId)) {
         state.activeGemId = '';
       }
@@ -5055,21 +5141,9 @@ function loadState() {
 
 function saveState() {
   try {
-    const snapshot = buildConversationSnapshot();
-    const existing = readRawLocalState() || {};
-    const cloudConversationCacheByUid = { ...(existing.cloudConversationCacheByUid || {}) };
-    const userId = getCurrentUserCacheKey();
-    if (userId) {
-      cloudConversationCacheByUid[userId] = {
-        ...snapshot,
-        email: currentUser?.email || '',
-      };
-    }
-
+    const existing = stripLocalConversationState(readRawLocalState() || {});
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...existing,
-      conversations: snapshot.conversations,
-      currentConvId: snapshot.currentConvId,
       settings: state.settings,
       theme: state.theme,
       colorMode: state.colorMode,
@@ -5085,8 +5159,6 @@ function saveState() {
       sessionStats: state.sessionStats,
       pendingBranchPoint: state.pendingBranchPoint,
       persona: state.persona,
-      guestConversationCache: userId ? (existing.guestConversationCache || null) : snapshot,
-      cloudConversationCacheByUid,
     }));
   } catch(e) { console.warn('State save error:', e); }
 }
@@ -5146,19 +5218,7 @@ async function deleteConversationFromFirestore(convId) {
 }
 
 async function migrateLegacyLocalConversations() {
-  if (!currentUser || !firebaseServices.db || !firebaseServices.setDoc) return;
-  const legacy = getLegacyLocalConversationState();
-  const conversations = Object.values(legacy.conversations || {}).map(normalizeConversation).filter(Boolean);
-  if (!conversations.length) return;
-
-  for (const conv of conversations) {
-    await persistConversationToFirestore(conv);
-  }
-
-  if (!state.currentConvId && legacy.currentConvId && legacy.conversations?.[legacy.currentConvId]) {
-    state.currentConvId = legacy.currentConvId;
-  }
-  saveState();
+  return;
 }
 
 function subscribeToConversationList() {
@@ -5566,18 +5626,11 @@ async function initFirebase() {
       }
       currentUser = user || null;
       window.isGodMode = false;
+      clearInMemoryConversations();
       updateAuthUI();
       updateApiStatus();
 
       if (currentUser && firebaseServices.db) {
-        const localUserSnapshot = loadConversationSnapshotForUser(currentUser.uid);
-        if (localUserSnapshot) {
-          applyConversationSnapshot(localUserSnapshot);
-          renderChatList();
-          renderMessages('force');
-          updateChatTitle();
-        }
-
         try {
           const userRef = firebaseServices.doc(firebaseServices.db, 'users', currentUser.uid);
           const userSnap = firebaseServices.getDoc ? await firebaseServices.getDoc(userRef) : null;
@@ -5619,13 +5672,14 @@ async function initFirebase() {
           showToast(err?.message || 'Failed to confirm checkout');
         }
       } else {
-        const guestSnapshot = loadGuestConversationSnapshot();
-        if (guestSnapshot) {
-          applyConversationSnapshot(guestSnapshot);
-        } else {
-          state.conversations = {};
-          state.currentConvId = null;
-        }
+        clearInMemoryConversations();
+        state.usageProfile = {
+          role: 'user',
+          planId: getDefaultPlanId(),
+          tokensUsed: 0,
+          tokenLimit: getDefaultTokenLimit(),
+          creditBalance: 0,
+        };
         saveState();
         renderChatList();
         renderMessages('force');
@@ -8470,6 +8524,7 @@ async function renderUsageStats() {
   const usageBarEl = document.getElementById('usage-bar');
   const usageFillEl = document.getElementById('usage-bar-fill');
   const usageMetaEl = document.getElementById('usage-meta');
+  const balanceEl = document.getElementById('usage-balance');
   if (!usageCard || !planNameEl || !usageBarEl || !usageFillEl || !usageMetaEl) return;
 
   if (!firebaseServices.enabled || !currentUser || !firebaseServices.db || !firebaseServices.doc || !firebaseServices.getDoc) {
@@ -8486,6 +8541,7 @@ async function renderUsageStats() {
     usageBarEl.hidden = !defaultPlan.showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = firebaseServices.enabled ? 'Sign in to view usage.' : 'Google sign-in required.';
+    if (balanceEl) balanceEl.textContent = '0 top-up units available';
     updateSubscriptionButton(state.usageProfile);
     updatePricingModalState(state.usageProfile.planId, state.usageProfile.role);
     updateModeUI();
@@ -8527,7 +8583,6 @@ async function renderUsageStats() {
     usageBarEl.hidden = !planDef.showProgressBar;
     usageFillEl.style.width = `${pct}%`;
     usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} compute units used`;
-    const balanceEl = document.getElementById('usage-balance');
     if (balanceEl) {
       balanceEl.textContent = `${creditBalance.toLocaleString()} top-up units available`;
     }
@@ -8539,6 +8594,7 @@ async function renderUsageStats() {
     usageBarEl.hidden = !getPlanDefinition(getDefaultPlanId()).showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = 'Unable to load usage right now.';
+    if (balanceEl) balanceEl.textContent = '0 top-up units available';
     updateSubscriptionButton(state.usageProfile);
     updateModeUI();
   }
