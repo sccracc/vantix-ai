@@ -10,7 +10,7 @@ const DEFAULT_PLAN_CONFIG = {
     free: {
       label: 'Free',
       priceUsd: 0,
-      tokenLimit: 10000,
+      tokenLimit: 5000,
       showProgressBar: true,
     },
     starter: {

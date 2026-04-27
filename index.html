@@ -3915,6 +3915,181 @@ body::before {
   transition: all var(--transition-fast);
 }
 
+/* ============================================================
+   LIGHT MODE REVIEW OVERRIDES
+   ============================================================ */
+[data-color-mode="light"] #main {
+  background: transparent;
+}
+
+[data-color-mode="light"] #topbar {
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.06);
+}
+
+[data-color-mode="light"] #messages-container,
+[data-color-mode="light"] #messages {
+  background: transparent;
+}
+
+[data-color-mode="light"] .welcome-hero,
+[data-color-mode="light"] .welcome-panel {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,249,255,0.96)),
+    #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+[data-color-mode="light"] .welcome-badge,
+[data-color-mode="light"] .metric-pill,
+[data-color-mode="light"] .suggestion-card,
+[data-color-mode="light"] .file-chip,
+[data-color-mode="light"] .followup-btn,
+[data-color-mode="light"] .gem-summary,
+[data-color-mode="light"] .gem-card {
+  background: rgba(247, 250, 255, 0.96);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-color-mode="light"] .welcome-hero::before {
+  background: radial-gradient(circle, rgba(91, 107, 255, 0.14), transparent 66%);
+  opacity: 1;
+}
+
+[data-color-mode="light"] .suggestion-card:hover,
+[data-color-mode="light"] .followup-btn:hover,
+[data-color-mode="light"] .gem-card:hover {
+  background: #ffffff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.10);
+}
+
+[data-color-mode="light"] .message-meta,
+[data-color-mode="light"] .welcome-panel-sub,
+[data-color-mode="light"] .welcome-sub,
+[data-color-mode="light"] .suggestion-desc,
+[data-color-mode="light"] .metric-label,
+[data-color-mode="light"] .composer-footnote,
+[data-color-mode="light"] .session-usage {
+  color: #5f6f86;
+}
+
+[data-color-mode="light"] .message.assistant .message-content,
+[data-color-mode="light"] .typing-dots {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,1), rgba(248,250,255,0.98)),
+    #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+[data-color-mode="light"] .message.user .message-content {
+  box-shadow: 0 14px 28px rgba(91, 107, 255, 0.18);
+}
+
+[data-color-mode="light"] .message-content blockquote {
+  color: #4f5f76;
+  background: rgba(91, 107, 255, 0.04);
+  border-radius: 14px;
+  padding: 12px 14px 12px 16px;
+}
+
+[data-color-mode="light"] .message-content th {
+  background: #eef3ff;
+}
+
+[data-color-mode="light"] .code-block-wrapper {
+  background: #f6f8fc;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+[data-color-mode="light"] .code-block-header {
+  background: rgba(226, 232, 240, 0.7);
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-color-mode="light"] .code-lang-badge {
+  color: #475569;
+}
+
+[data-color-mode="light"] .code-action-btn {
+  background: rgba(255,255,255,0.72);
+  border-color: rgba(15, 23, 42, 0.08);
+  color: #475569;
+}
+
+[data-color-mode="light"] .code-action-btn:hover {
+  background: #ffffff;
+  color: #111827;
+}
+
+[data-color-mode="light"] .code-run-output {
+  background: #eef4ff;
+  border-top-color: rgba(15, 23, 42, 0.08);
+  color: #1d4ed8;
+}
+
+[data-color-mode="light"] .message-content code:not(pre code) {
+  background: #e9eefc;
+  color: #2444b8;
+}
+
+[data-color-mode="light"] .thinking-block {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+[data-color-mode="light"] .thinking-header:hover {
+  background: rgba(245, 158, 11, 0.06);
+}
+
+[data-color-mode="light"] .input-wrapper {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,1), rgba(248,250,255,0.98)),
+    #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 22px 56px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+[data-color-mode="light"] .input-wrapper:focus-within {
+  box-shadow: 0 22px 56px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--border-accent), 0 0 0 4px rgba(91, 107, 255, 0.08);
+}
+
+[data-color-mode="light"] .composer-history,
+[data-color-mode="light"] .file-chip-description,
+[data-color-mode="light"] .form-static-value {
+  background: #f8fbff;
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-color-mode="light"] .toolbar-btn,
+[data-color-mode="light"] .btn-secondary,
+[data-color-mode="light"] .sidebar-btn,
+[data-color-mode="light"] .msg-action-btn {
+  background: rgba(241, 245, 255, 0.96);
+  border-color: rgba(15, 23, 42, 0.08);
+  color: #334155;
+}
+
+[data-color-mode="light"] .toolbar-btn:hover,
+[data-color-mode="light"] .toolbar-btn.active,
+[data-color-mode="light"] .btn-secondary:hover,
+[data-color-mode="light"] .sidebar-btn:hover,
+[data-color-mode="light"] .msg-action-btn:hover {
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+[data-color-mode="light"] .modal {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,1), rgba(248,250,255,0.98)),
+    #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
 .gem-card:hover {
   border-color: var(--border-accent);
   background: rgba(255,255,255,0.045);
@@ -4567,7 +4742,7 @@ body::before {
           <div class="pricing-price">$0 <span>/ month</span></div>
         </div>
         <ul class="pricing-feature-list">
-          <li>10,000 Tokens</li>
+          <li>5,000 Tokens</li>
           <li>Standard Speed</li>
           <li>Basic Memory</li>
         </ul>
@@ -4831,7 +5006,7 @@ const DEFAULT_PLAN_CONFIG = {
     free: {
       label: 'Free',
       priceUsd: 0,
-      tokenLimit: 10000,
+      tokenLimit: 5000,
       showProgressBar: true,
     },
     starter: {
@@ -4953,7 +5128,7 @@ let state = {
     role: 'user',
     planId: 'free',
     tokensUsed: 0,
-    tokenLimit: 100000,
+    tokenLimit: 5000,
   },
 };
 let planConfig = JSON.parse(JSON.stringify(DEFAULT_PLAN_CONFIG));
