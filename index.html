@@ -194,26 +194,6 @@
   --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
 }
 
-[data-color-mode="light"] {
-  --bg-base: #f3f7ff;
-  --bg-surface: #ffffff;
-  --bg-elevated: #eef3ff;
-  --bg-card: rgba(255, 255, 255, 0.9);
-  --bg-input: rgba(15, 23, 42, 0.05);
-  --bg-hover: rgba(15, 23, 42, 0.08);
-  --border: rgba(15, 23, 42, 0.12);
-  --border-accent: color-mix(in srgb, var(--accent-1) 44%, white);
-  --text-primary: #111827;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --assistant-bg: rgba(255, 255, 255, 0.96);
-  --shadow-sm: 0 2px 10px rgba(15, 23, 42, 0.08);
-  --shadow-md: 0 14px 36px rgba(15, 23, 42, 0.12);
-  --shadow-lg: 0 24px 70px rgba(15, 23, 42, 0.16);
-  --shadow-accent: 0 8px 24px color-mix(in srgb, var(--accent-1) 26%, transparent);
-  --scrollbar: rgba(15, 23, 42, 0.16);
-}
-
 /* ============================================================
    RESET & BASE
    ============================================================ */
@@ -2192,6 +2172,16 @@ select:focus:not(:focus-visible) {
 .form-input:focus { border-color: var(--border-accent); }
 .form-input::placeholder { color: var(--text-muted); }
 
+select.form-input {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+select.form-input option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
 textarea.form-input {
   resize: vertical;
   min-height: 80px;
@@ -2575,6 +2565,26 @@ textarea.form-input {
   --scrollbar: rgba(255,255,255,0.15);
 }
 
+[data-color-mode="light"][data-theme] {
+  --bg-base: #f3f7ff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #eef3ff;
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-input: rgba(15, 23, 42, 0.05);
+  --bg-hover: rgba(15, 23, 42, 0.08);
+  --border: rgba(15, 23, 42, 0.12);
+  --border-accent: color-mix(in srgb, var(--accent-1) 44%, white);
+  --text-primary: #111827;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --assistant-bg: rgba(255, 255, 255, 0.97);
+  --shadow-sm: 0 2px 10px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 14px 36px rgba(15, 23, 42, 0.12);
+  --shadow-lg: 0 24px 70px rgba(15, 23, 42, 0.16);
+  --shadow-accent: 0 8px 24px color-mix(in srgb, var(--accent-1) 26%, transparent);
+  --scrollbar: rgba(15, 23, 42, 0.16);
+}
+
 html, body {
   background:
     radial-gradient(circle at top left, rgba(124, 140, 255, 0.14), transparent 28%),
@@ -2596,6 +2606,13 @@ body::before {
   opacity: 0.18;
 }
 
+[data-color-mode="light"] body::before {
+  background:
+    linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px),
+    linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px);
+  opacity: 0.1;
+}
+
 #app::before {
   background:
     radial-gradient(ellipse 90% 65% at 12% 8%, rgba(124, 140, 255, 0.22), transparent 50%),
@@ -2605,6 +2622,22 @@ body::before {
   animation: meshPulse 16s ease-in-out infinite alternate;
 }
 
+[data-color-mode="light"] html,
+[data-color-mode="light"] body {
+  background:
+    radial-gradient(circle at top left, rgba(124, 140, 255, 0.08), transparent 30%),
+    radial-gradient(circle at 86% 10%, rgba(95, 211, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.92)),
+    var(--bg-base);
+}
+
+[data-color-mode="light"] #app::before {
+  background:
+    radial-gradient(ellipse 90% 65% at 12% 8%, rgba(124, 140, 255, 0.08), transparent 50%),
+    radial-gradient(ellipse 60% 60% at 86% 78%, rgba(95, 211, 255, 0.06), transparent 52%),
+    radial-gradient(circle at 52% 42%, rgba(15,23,42,0.02), transparent 42%);
+}
+
 #app::after {
   content: '';
   position: fixed;
@@ -2612,6 +2645,10 @@ body::before {
   pointer-events: none;
   background: var(--noise);
   opacity: 0.24;
+}
+
+[data-color-mode="light"] #app::after {
+  opacity: 0.08;
 }
 
 #sidebar {
