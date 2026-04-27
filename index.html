@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="midnight">
+<html lang="en" data-theme="midnight" data-color-mode="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -192,6 +192,26 @@
   --status-green: #10b981;
   --status-red: #ef4444;
   --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+[data-color-mode="light"] {
+  --bg-base: #f3f7ff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #eef3ff;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-input: rgba(15, 23, 42, 0.05);
+  --bg-hover: rgba(15, 23, 42, 0.08);
+  --border: rgba(15, 23, 42, 0.12);
+  --border-accent: color-mix(in srgb, var(--accent-1) 44%, white);
+  --text-primary: #111827;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --assistant-bg: rgba(255, 255, 255, 0.96);
+  --shadow-sm: 0 2px 10px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 14px 36px rgba(15, 23, 42, 0.12);
+  --shadow-lg: 0 24px 70px rgba(15, 23, 42, 0.16);
+  --shadow-accent: 0 8px 24px color-mix(in srgb, var(--accent-1) 26%, transparent);
+  --scrollbar: rgba(15, 23, 42, 0.16);
 }
 
 /* ============================================================
@@ -570,6 +590,12 @@ select:focus:not(:focus-visible) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-secondary);
+}
+
+.usage-plan-percent {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .usage-plan-name {
@@ -4100,7 +4126,10 @@ body::before {
 
       <div class="usage-card" id="usage-card">
         <div class="usage-plan-row">
-          <div class="usage-plan-label">Plan</div>
+          <div>
+            <div class="usage-plan-label">Plan</div>
+            <div class="usage-plan-percent" id="usage-plan-percent">0% used</div>
+          </div>
           <div class="usage-plan-main">
             <div class="usage-plan-name" id="usage-plan-name">Free</div>
             <button class="sidebar-btn upgrade-btn" type="button" id="usage-plan-btn">Plans & Credits</button>
@@ -4338,12 +4367,24 @@ body::before {
     </div>
 
     <div class="form-section">
-      <label class="form-label">Recommended Responses</label>
+      <label class="form-label" for="settings-theme-select">Theme</label>
+      <select class="form-input" id="settings-theme-select">
+        <option value="midnight">Midnight</option>
+        <option value="ocean">Ocean</option>
+        <option value="forest">Forest</option>
+        <option value="candy">Candy</option>
+        <option value="mono">Mono</option>
+      </select>
+      <p class="form-note">Choose the workspace color theme used across the app.</p>
+    </div>
+
+    <div class="form-section">
+      <label class="form-label">Appearance</label>
       <label class="settings-checkbox-row">
-        <input type="checkbox" id="recommended-responses-input">
-        <span>Show suggested follow-up questions after replies</span>
+        <input type="checkbox" id="settings-light-mode-input">
+        <span>Use light mode</span>
       </label>
-      <p class="form-note">When enabled, Vantix generates suggested follow-up questions after every assistant response. This uses credits after every chat.</p>
+      <p class="form-note">Switch between the default dark presentation and a lighter workspace.</p>
     </div>
 
     <div class="modal-footer">
@@ -4772,6 +4813,7 @@ let state = {
     recommendedResponses: true,
   },
   theme: 'midnight',
+  colorMode: 'dark',
   mode: 'expert', // 'expert' | 'fast'
   memories: [],
   prompts: [...DEFAULT_PROMPTS],
@@ -4950,7 +4992,8 @@ function loadState() {
       state.settings.ttsEnabled = true;
       state.settings.temperature = 0.7;
       state.settings.recommendedResponses = saved?.settings?.recommendedResponses !== false;
-      state.theme = 'midnight';
+      state.theme = typeof saved.theme === 'string' ? saved.theme : 'midnight';
+      state.colorMode = saved?.colorMode === 'light' ? 'light' : 'dark';
       state.mode = saved.mode || 'expert';
       state.persona = 'vantix';
       state.memories = saved.memories || [];
@@ -4992,6 +5035,7 @@ function saveState() {
       currentConvId: snapshot.currentConvId,
       settings: state.settings,
       theme: state.theme,
+      colorMode: state.colorMode,
       mode: state.mode,
       memories: state.memories,
       prompts: state.prompts,
@@ -5195,11 +5239,39 @@ function canAccessExpertMode(profile = state.usageProfile || {}) {
   return role === 'admin' || ['pro', 'ultra', 'god_mode'].includes(planId);
 }
 
+function isExpertModel(modelId = '') {
+  return String(modelId || '') === 'deepseek-v4-pro';
+}
+
 function getRemainingUsageUnits(profile = state.usageProfile || {}) {
   const tokenLimit = Number(profile.tokenLimit || 0);
   const tokensUsed = Number(profile.tokensUsed || 0);
   const creditBalance = Number(profile.creditBalance || 0);
   return (tokenLimit - tokensUsed) + creditBalance;
+}
+
+function calculateUsageUnitsFromUsage(usage, modelId = getApiModelId()) {
+  if (!usage) return 0;
+  const promptTokens = Number(usage.prompt_tokens || 0);
+  const completionTokens = Number(usage.completion_tokens || 0);
+  const totalTokens = Number(usage.total_tokens || (promptTokens + completionTokens));
+  if (!totalTokens) return 0;
+  return Math.max(1, Math.ceil(isExpertModel(modelId) ? totalTokens * 10 : totalTokens));
+}
+
+function applyOptimisticUsageDelta(usage, modelId = getApiModelId()) {
+  if (!state.usageProfile || state.usageProfile.role === 'admin') return;
+  const delta = calculateUsageUnitsFromUsage(usage, modelId);
+  if (!delta) return;
+  state.usageProfile.tokensUsed = Number(state.usageProfile.tokensUsed || 0) + delta;
+}
+
+function queueUsageStatsRefresh(delays = [150, 700, 1600]) {
+  delays.forEach(delay => {
+    setTimeout(() => {
+      renderUsageStats();
+    }, delay);
+  });
 }
 
 function getExpertModeDisclaimer(profile = state.usageProfile || {}) {
@@ -7512,6 +7584,11 @@ async function streamResponse(conv, typingEl) {
   conv.messages.push(assistantMsg);
   conv.updatedAt = Date.now();
   persistConversationToFirestore(conv);
+  if (lastUsage) {
+    applyOptimisticUsageDelta(lastUsage, body.model);
+    await renderUsageStats();
+    queueUsageStatsRefresh();
+  }
   const assistantIdx = conv.messages.length - 1;
 
   const actionsEl = document.createElement('div');
@@ -8180,14 +8257,9 @@ function showToast(message, duration = 2500) {
 // SETTINGS
 // ============================================================
 function openSettings() {
-  document.getElementById('api-key-input').value = state.settings.apiKey;
-  document.getElementById('model-select').value = state.settings.model;
   document.getElementById('system-prompt-input').value = state.settings.systemPrompt;
-  document.getElementById('temp-slider').value = state.settings.temperature;
-  const tDisp = parseFloat(state.settings.temperature).toFixed(1);
-  document.getElementById('temp-display').textContent = tDisp;
-  const tv = document.getElementById('temp-val');
-  if (tv) tv.textContent = tDisp;
+  document.getElementById('settings-theme-select').value = state.theme;
+  document.getElementById('settings-light-mode-input').checked = state.colorMode === 'light';
   openModal('settings-modal');
 }
 
@@ -8254,6 +8326,23 @@ function saveSettings() {
   showToast('Settings saved!');
 }
 
+function openSettings() {
+  document.getElementById('system-prompt-input').value = state.settings.systemPrompt;
+  document.getElementById('settings-theme-select').value = state.theme;
+  document.getElementById('settings-light-mode-input').checked = state.colorMode === 'light';
+  openModal('settings-modal');
+}
+
+function saveSettings() {
+  state.settings.systemPrompt = document.getElementById('system-prompt-input').value;
+  applyTheme(document.getElementById('settings-theme-select').value, false);
+  applyColorMode(document.getElementById('settings-light-mode-input').checked ? 'light' : 'dark', false);
+  saveState();
+  updateApiStatus();
+  closeModal('settings-modal');
+  showToast('Settings saved!');
+}
+
 function updateApiStatus() {
   const dot = document.getElementById('api-status-dot');
   const text = document.getElementById('api-status-text');
@@ -8288,6 +8377,28 @@ function applyTheme(theme) {
 // ============================================================
 // UTILITY FUNCTIONS
 // ============================================================
+function applyTheme(theme, shouldNotify = true) {
+  document.documentElement.dataset.theme = theme;
+  state.theme = theme;
+  saveState();
+  document.querySelectorAll('.theme-swatch').forEach(s => {
+    s.classList.toggle('active', s.dataset.theme === theme);
+  });
+  if (shouldNotify) {
+    showToast(`${theme.charAt(0).toUpperCase() + theme.slice(1)} theme applied`);
+  }
+}
+
+function applyColorMode(colorMode, shouldNotify = false) {
+  const nextMode = colorMode === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.colorMode = nextMode;
+  state.colorMode = nextMode;
+  saveState();
+  if (shouldNotify) {
+    showToast(`${nextMode === 'light' ? 'Light' : 'Dark'} mode applied`);
+  }
+}
+
 function escapeHtml(str) {
   if (typeof str !== 'string') return '';
   return str
@@ -8318,6 +8429,7 @@ function formatSessionUsageText() {
 async function renderUsageStats() {
   const usageCard = document.getElementById('usage-card');
   const planNameEl = document.getElementById('usage-plan-name');
+  const planPercentEl = document.getElementById('usage-plan-percent');
   const usageBarEl = document.getElementById('usage-bar');
   const usageFillEl = document.getElementById('usage-bar-fill');
   const usageMetaEl = document.getElementById('usage-meta');
@@ -8333,6 +8445,7 @@ async function renderUsageStats() {
     };
     const defaultPlan = getPlanDefinition(getDefaultPlanId());
     planNameEl.textContent = defaultPlan.label || 'Free';
+    if (planPercentEl) planPercentEl.textContent = '0% used';
     usageBarEl.hidden = !defaultPlan.showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = firebaseServices.enabled ? 'Sign in to view usage.' : 'Google sign-in required.';
@@ -8362,6 +8475,7 @@ async function renderUsageStats() {
 
     if (role === 'admin') {
       planNameEl.textContent = planDef.label || 'God Mode';
+      if (planPercentEl) planPercentEl.textContent = 'Unlimited';
       usageBarEl.hidden = true;
       usageMetaEl.textContent = 'Unlimited admin compute units.';
       updateSubscriptionButton(state.usageProfile);
@@ -8372,6 +8486,7 @@ async function renderUsageStats() {
 
     const pct = Math.max(0, Math.min(100, (tokensUsed / Math.max(1, tokenLimit)) * 100));
     planNameEl.textContent = planDef.label || 'Free';
+    if (planPercentEl) planPercentEl.textContent = `${pct.toFixed(pct >= 10 ? 0 : 1)}% used`;
     usageBarEl.hidden = !planDef.showProgressBar;
     usageFillEl.style.width = `${pct}%`;
     usageMetaEl.textContent = `${tokensUsed.toLocaleString()} / ${tokenLimit.toLocaleString()} compute units used`;
@@ -8383,6 +8498,7 @@ async function renderUsageStats() {
     updatePricingModalState(planId, role);
     updateModeUI();
   } catch (err) {
+    if (planPercentEl) planPercentEl.textContent = '--';
     usageBarEl.hidden = !getPlanDefinition(getDefaultPlanId()).showProgressBar;
     usageFillEl.style.width = '0%';
     usageMetaEl.textContent = 'Unable to load usage right now.';
@@ -9390,10 +9506,8 @@ async function init() {
   state.settings.apiKey = '__backend_proxy__';
 
   // Apply theme
-  document.documentElement.dataset.theme = state.theme;
-  document.querySelectorAll('.theme-swatch').forEach(s => {
-    s.classList.toggle('active', s.dataset.theme === state.theme);
-  });
+  applyTheme(state.theme, false);
+  applyColorMode(state.colorMode, false);
 
   // Set thinking toggle
   document.getElementById('search-toggle').checked = state.searchEnabled;
