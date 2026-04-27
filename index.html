@@ -7662,6 +7662,10 @@ function getSystemPrompt() {
   const currentPlan = getCurrentUserPlanLabel();
   const currentBalance = getCurrentUserBalanceLabel();
   const currentEmail = String(currentUser?.email || '');
+  const freePlan = getPlanDefinition('free');
+  const starterPlan = getPlanDefinition('starter');
+  const proPlan = getPlanDefinition('pro');
+  const ultraPlan = getPlanDefinition('ultra');
   let sys = `Knowledge Cutoff Override: Today is ${currentDate}. You are operating in the year 2026.
 
 Identity & Core Directive:
@@ -7684,13 +7688,13 @@ Pro/Ultra Perk: Users on these tiers automatically receive a 50% discount on all
 
 Monthly Subscription Tiers:
 
-Free Tier: 50,000 Units per day (resets daily at Midnight EST). Casual use only. No Expert Mode.
+Free Tier: ${Number(freePlan.tokenLimit || 0).toLocaleString()} Units per day (resets daily at Midnight EST). Casual use only. No Expert Mode.
 
-Starter Plan ($10/mo): 1,250,000 Units per month. Best for students. Includes Web Search. No Expert Mode.
+Starter Plan ($${Number(starterPlan.priceUsd || 0)}/mo): ${Number(starterPlan.tokenLimit || 0).toLocaleString()} Units per month. Best for students. Includes Web Search. No Expert Mode.
 
-Pro Plan ($20/mo): 6,500,000 Units per month. Unlocks Expert Mode. Best for active creators and developers.
+Pro Plan ($${Number(proPlan.priceUsd || 0)}/mo): ${Number(proPlan.tokenLimit || 0).toLocaleString()} Units per month. Unlocks Expert Mode. Best for active creators and developers.
 
-Ultra Plan ($50/mo): 35,000,000 Units per month. Unlocks Expert Mode. Designed for heavy research and infinite scaling.
+Ultra Plan ($${Number(ultraPlan.priceUsd || 0)}/mo): ${Number(ultraPlan.tokenLimit || 0).toLocaleString()} Units per month. Unlocks Expert Mode. Designed for heavy research and infinite scaling.
 
 The Vault (One-Time Top-Ups):
 If users run out of monthly units, they can buy non-expiring units that stay in their 'Vault':
