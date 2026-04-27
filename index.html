@@ -4084,7 +4084,7 @@ body::before {
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21.8 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.2c1.9-1.7 3.1-4.4 3.1-7.7Z" fill="currentColor"/><path d="M12 22c2.7 0 5-.9 6.7-2.4l-3.2-2.6c-.9.6-2 .9-3.5.9-2.7 0-4.9-1.8-5.7-4.2H3v2.7A10 10 0 0 0 12 22Z" fill="currentColor" opacity=".85"/><path d="M6.3 13.7A6 6 0 0 1 6 12c0-.6.1-1.2.3-1.7V7.6H3A10 10 0 0 0 2 12c0 1.6.4 3.1 1 4.4l3.3-2.7Z" fill="currentColor" opacity=".65"/><path d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8C17 3.2 14.7 2 12 2A10 10 0 0 0 3 7.6l3.3 2.7C7.1 7.9 9.3 6.1 12 6.1Z" fill="currentColor" opacity=".95"/></svg>
           <span>Sign In with Google</span>
         </button>
-        <div class="auth-user" id="auth-user" hidden>
+        <div class="auth-user hidden" id="auth-user" hidden>
           <div class="auth-user-label">Signed in as</div>
           <div class="auth-user-email" id="auth-user-email"></div>
           <button class="sidebar-btn" type="button" id="signout-btn">Sign Out</button>
@@ -5542,9 +5542,11 @@ function updateAuthUI() {
 
   authPanel.hidden = false;
   signInBtn.hidden = !!currentUser;
+  signInBtn.classList.toggle('hidden', !!currentUser);
   signInBtn.disabled = false;
   signInBtn.title = '';
   authUserEl.hidden = !currentUser;
+  authUserEl.classList.toggle('hidden', !currentUser);
   emailEl.textContent = currentUser?.email || '';
   updateComposerAccess();
   renderUsageStats();
