@@ -5033,11 +5033,29 @@ const DEFAULT_PLAN_CONFIG = {
   },
 };
 const FIREBASE_VERSION = '10.12.5';
-const FIREBASE_CONFIG = window.VANTIX_FIREBASE_CONFIG || {};
+let FIREBASE_CONFIG = sanitizeFirebaseConfig(window.VANTIX_FIREBASE_CONFIG || {});
 
 
 function maxCompletionTokensForModel() {
   return 8192;
+}
+
+function sanitizeFirebaseConfig(rawConfig = {}) {
+  const candidate = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+  return {
+    apiKey: String(candidate.apiKey || '').trim(),
+    authDomain: String(candidate.authDomain || '').trim(),
+    projectId: String(candidate.projectId || '').trim(),
+    appId: String(candidate.appId || '').trim(),
+    storageBucket: String(candidate.storageBucket || '').trim(),
+    messagingSenderId: String(candidate.messagingSenderId || '').trim(),
+    measurementId: String(candidate.measurementId || '').trim(),
+  };
+}
+
+function setFirebaseConfig(nextConfig = {}) {
+  FIREBASE_CONFIG = sanitizeFirebaseConfig(nextConfig);
+  window.VANTIX_FIREBASE_CONFIG = { ...FIREBASE_CONFIG };
 }
 
 function getSelectedModelId() {
@@ -5939,9 +5957,23 @@ async function loadPlanConfig() {
   }
 }
 
+async function loadFirebaseConfig() {
+  if (hasFirebaseConfig()) return;
+
+  try {
+    const resp = await fetch('./firebase-config.json', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const json = await resp.json();
+    const candidate = json?.firebaseConfig || json?.VANTIX_FIREBASE_CONFIG || json;
+    setFirebaseConfig(candidate);
+  } catch (err) {
+    console.warn('Firebase config load skipped:', err);
+  }
+}
+
 async function initFirebase() {
   if (!hasFirebaseConfig()) {
-    console.warn('Firebase config missing. Set window.VANTIX_FIREBASE_CONFIG at runtime.');
+    console.warn('Firebase config missing. Add firebase-config.json or set window.VANTIX_FIREBASE_CONFIG at runtime.');
     updateApiStatus();
     updateAuthUI();
     return;
@@ -6107,7 +6139,7 @@ function updateComposerAccess() {
 
 async function signInWithGoogle() {
   if (!firebaseServices.enabled || !firebaseServices.auth || !firebaseServices.signInWithPopup) {
-    showToast('Add Firebase config to enable sign-in');
+    showToast('Add firebase-config.json to enable sign-in');
     return;
   }
 
@@ -10032,6 +10064,7 @@ function updateApiStatus() {
 // ============================================================
 async function init() {
   await loadPlanConfig();
+  await loadFirebaseConfig();
   document.title = `${BRAND_NAME} • ${BUILD_ID}`;
   // Load pdf.js worker path
   if (window['pdfjs-dist/build/pdf']) {
@@ -10086,7 +10119,7 @@ async function init() {
 
   // Welcome toast if Firebase config is missing
   if (!firebaseServices.enabled) {
-    setTimeout(() => showToast('Add your Firebase config to enable Google sign-in'), 800);
+    setTimeout(() => showToast('Add firebase-config.json to enable Google sign-in'), 800);
   }
 
   console.log('%cVantix AI Neural Interface', 'font-size: 18px; font-weight: bold; color: #6366f1;');
